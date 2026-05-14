@@ -1,36 +1,96 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Sunways Asset
 
-## Getting Started
+Sunways Asset is a Web3 energy asset platform for representing renewable energy infrastructure, operational data, revenue flows, and peer-to-peer energy market activity through verifiable on-chain records and an application-oriented backend.
 
-First, run the development server:
+The project combines a Next.js frontend, a Go backend, and Ethereum-compatible smart contracts developed with Foundry. It is currently focused on local development with Anvil, wallet connection, wallet-based authentication, and the foundation for energy asset registration.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Project Overview
+
+Sunways Asset aims to turn real or simulated energy assets into traceable digital assets. The system is designed around a few core ideas:
+
+- Energy assets should have a clear on-chain identity.
+- Wallets should be used as the primary user identity layer.
+- Backend services should index blockchain events into queryable business data.
+- Device and oracle data should be auditable and linked to specific assets.
+- Revenue settlement and P2P trading should be built on top of verified asset, identity, and event data.
+
+This repository is organized as a product-oriented monorepo, with the frontend and backend already present and room for Foundry contracts to be added under `contracts/`.
+
+## Development Goals
+
+The long-term goal is to build a full Web3 energy asset system with:
+
+- Wallet connection and signature-based authentication.
+- Energy NFT or asset registry contracts.
+- Blockchain event indexing through a Go backend.
+- Asset metadata, ownership, status, and operational views.
+- Device data ingestion and oracle-style data anchoring.
+- Revenue settlement for energy assets.
+- P2P trading for energy rights, asset shares, or related certificates.
+- A frontend console for users, operators, and future administrative workflows.
+
+The current implementation includes the frontend wallet flow and a minimal Go authentication API for nonce-based wallet signature login.
+
+## Technology Stack
+
+- **Frontend:** Next.js, React, TypeScript, Tailwind CSS.
+- **Wallet and Web3 UI:** RainbowKit, wagmi, viem.
+- **Backend:** Go HTTP API.
+- **Blockchain tooling:** Foundry and Anvil.
+- **Authentication model:** wallet nonce, personal signature verification, and backend session token.
+
+## Project Structure
+
+```text
+sunways-asset/
+  backend/
+    cmd/
+      api/                 # Go API entrypoint
+    internal/
+      auth/                # Session management
+      httpapi/             # HTTP handlers and routing
+      wallet/              # Wallet nonce and signature verification
+    go.mod
+
+  src/
+    components/
+      wallet/              # Wallet connection and signature login UI
+    config/                # Chain and wagmi configuration
+    hooks/                 # Frontend Web3 hooks
+    pages/                 # Next.js Pages Router
+    services/              # Frontend API clients
+
+  config/                  # Shared project configuration
+  docs/                    # Internal development documentation
+  public/                  # Static assets
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Planned contract and backend domains:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```text
+contracts/                 # Foundry smart contracts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+backend/internal/
+  nft/                     # Energy NFT and asset registry business logic
+  oracle/                  # Device data ingestion and on-chain anchoring
+  settlement/              # Revenue accounting and claim workflows
+  trading/                 # P2P energy asset trading
+  blockchain/              # Ethereum client, ABI, contracts, tx, listeners, events
+```
 
-## Learn More
+## Current Status
 
-To learn more about Next.js, take a look at the following resources:
+The project currently supports:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Connecting a browser wallet through RainbowKit.
+- Detecting and switching to the local Anvil chain.
+- Requesting a backend nonce for a connected wallet.
+- Signing the nonce message with the wallet.
+- Verifying the signature in the Go backend.
+- Creating a temporary backend session.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The next major area is the smart contract foundation for energy asset registration and frontend/backend integration around deployed contract addresses and ABI files.
 
-## Deploy on Vercel
+## Disclaimer
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+This project explores Web3 infrastructure for energy assets. Energy asset tokenization, revenue rights, carbon credits, and related trading systems may involve legal, financial, and regulatory requirements. Nothing in this repository should be treated as legal, financial, or investment advice.

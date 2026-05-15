@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -12,10 +11,11 @@ import (
 	"sunways-asset/backend/internal/repository"
 	"sunways-asset/backend/internal/wallet"
 
+	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
-// Server wires HTTP routes to wallet nonce and auth-session services.
+// Server wires Gin routes to wallet nonce, auth-session, and repository services.
 type Server struct {
 	auth           *auth.Service
 	frontendOrigin string
@@ -38,43 +38,44 @@ func NewServer(
 	}
 }
 
-// Handler returns the full HTTP handler tree, including route registration and CORS.
-func (s *Server) Handler() http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health", s.health)
-	mux.HandleFunc("POST /auth/nonce", s.createNonce)
-	mux.HandleFunc("POST /auth/verify", s.verify)
-	mux.HandleFunc("GET /auth/me", s.me)
-	mux.HandleFunc("POST /auth/logout", s.logout)
-	mux.HandleFunc("GET /stations", s.listStations)
-	mux.HandleFunc("GET /stations/{id}", s.getStation)
-	mux.HandleFunc("GET /dashboard/summary", s.dashboardSummary)
+// Router returns the Gin engine with routes, middleware, and handlers registered.
+func (s *Server) Router() *gin.Engine {
+	router := gin.New()
+	_ = router.SetTrustedProxies(nil)
+	router.Use(gin.Logger(), gin.Recovery(), s.cors())
 
-	return s.withCORS(mux)
+	router.GET("/health", s.health)
+	router.POST("/auth/nonce", s.createNonce)
+	router.POST("/auth/verify", s.verify)
+	router.GET("/auth/me", s.me)
+	router.POST("/auth/logout", s.logout)
+	router.GET("/stations", s.listStations)
+	router.GET("/stations/:id", s.getStation)
+	router.GET("/dashboard/summary", s.dashboardSummary)
+
+	return router
 }
 
-// health reports process readiness for local checks and container probes.
-func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+func (s *Server) health(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
-// createNonce issues a one-time wallet-signature challenge for a supplied address.
-func (s *Server) createNonce(w http.ResponseWriter, r *http.Request) {
+func (s *Server) createNonce(c *gin.Context) {
 	var req struct {
 		Address string `json:"address"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeError(c, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	nonce, err := s.wallet.CreateNonce(req.Address)
 	if err != nil {
-		writeError(w, statusForError(err), err.Error())
+		writeError(c, statusForError(err), err.Error())
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	c.JSON(http.StatusOK, gin.H{
 		"address":   nonce.Address,
 		"message":   nonce.Message,
 		"nonce":     nonce.Value,
@@ -82,144 +83,137 @@ func (s *Server) createNonce(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// verify validates the wallet signature and exchanges it for an API bearer session.
-func (s *Server) verify(w http.ResponseWriter, r *http.Request) {
+func (s *Server) verify(c *gin.Context) {
 	var req struct {
 		Address   string `json:"address"`
 		Signature string `json:"signature"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeError(c, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	if err := s.wallet.Verify(req.Address, req.Signature); err != nil {
-		writeError(w, statusForError(err), err.Error())
+		writeError(c, statusForError(err), err.Error())
 		return
 	}
 
 	session, err := s.auth.Create(req.Address)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to create session")
+		writeError(c, http.StatusInternalServerError, "failed to create session")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	c.JSON(http.StatusOK, gin.H{
 		"token":     session.Token,
 		"address":   session.Address,
 		"expiresAt": session.ExpiresAt.Format(time.RFC3339),
 	})
 }
 
-// me returns the active authenticated wallet session.
-func (s *Server) me(w http.ResponseWriter, r *http.Request) {
-	session, ok := s.sessionFromRequest(w, r)
+func (s *Server) me(c *gin.Context) {
+	session, ok := s.sessionFromRequest(c)
 	if !ok {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	c.JSON(http.StatusOK, gin.H{
 		"address":   session.Address,
 		"expiresAt": session.ExpiresAt.Format(time.RFC3339),
 	})
 }
 
-// logout invalidates a bearer session if the caller provided one.
-func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
-	token, ok := bearerToken(r)
+func (s *Server) logout(c *gin.Context) {
+	token, ok := bearerToken(c)
 	if ok {
 		s.auth.Delete(token)
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
-func (s *Server) listStations(w http.ResponseWriter, r *http.Request) {
+func (s *Server) listStations(c *gin.Context) {
 	limit := 50
-	if raw := r.URL.Query().Get("limit"); raw != "" {
+	if raw := c.Query("limit"); raw != "" {
 		parsed, err := strconv.Atoi(raw)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid limit")
+			writeError(c, http.StatusBadRequest, "invalid limit")
 			return
 		}
 		limit = parsed
 	}
 	stations, err := s.store.ListStations(limit)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to list stations")
+		writeError(c, http.StatusInternalServerError, "failed to list stations")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": stations})
+	c.JSON(http.StatusOK, gin.H{"items": stations})
 }
 
-func (s *Server) getStation(w http.ResponseWriter, r *http.Request) {
-	stationID, err := strconv.ParseUint(r.PathValue("id"), 10, 64)
+func (s *Server) getStation(c *gin.Context) {
+	stationID, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid station id")
+		writeError(c, http.StatusBadRequest, "invalid station id")
 		return
 	}
 	station, err := s.store.GetStation(stationID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			writeError(w, http.StatusNotFound, "station not found")
+			writeError(c, http.StatusNotFound, "station not found")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "failed to get station")
+		writeError(c, http.StatusInternalServerError, "failed to get station")
 		return
 	}
-	writeJSON(w, http.StatusOK, station)
+	c.JSON(http.StatusOK, station)
 }
 
-func (s *Server) dashboardSummary(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) dashboardSummary(c *gin.Context) {
 	summary, err := s.store.DashboardSummary()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to load dashboard summary")
+		writeError(c, http.StatusInternalServerError, "failed to load dashboard summary")
 		return
 	}
-	writeJSON(w, http.StatusOK, summary)
+	c.JSON(http.StatusOK, summary)
 }
 
-// sessionFromRequest extracts and validates a bearer session, writing an HTTP error on failure.
-func (s *Server) sessionFromRequest(w http.ResponseWriter, r *http.Request) (auth.Session, bool) {
-	token, ok := bearerToken(r)
+func (s *Server) sessionFromRequest(c *gin.Context) (auth.Session, bool) {
+	token, ok := bearerToken(c)
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "missing bearer token")
+		writeError(c, http.StatusUnauthorized, "missing bearer token")
 		return auth.Session{}, false
 	}
 
 	session, err := s.auth.Get(token)
 	if err != nil {
-		writeError(w, http.StatusUnauthorized, err.Error())
+		writeError(c, http.StatusUnauthorized, err.Error())
 		return auth.Session{}, false
 	}
 
 	return session, true
 }
 
-// bearerToken parses the Authorization header value expected by the frontend service.
-func bearerToken(r *http.Request) (string, bool) {
-	value := r.Header.Get("Authorization")
+func bearerToken(c *gin.Context) (string, bool) {
+	value := c.GetHeader("Authorization")
 	token, ok := strings.CutPrefix(value, "Bearer ")
 	return token, ok && token != ""
 }
 
-// withCORS allows the configured frontend to call the local API with JSON and bearer tokens.
-func (s *Server) withCORS(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		origin := r.Header.Get("Origin")
+func (s *Server) cors() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		origin := c.GetHeader("Origin")
 		if origin == s.frontendOrigin {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			c.Header("Access-Control-Allow-Origin", origin)
+			c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+			c.Header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		}
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
+		if c.Request.Method == http.MethodOptions {
+			c.AbortWithStatus(http.StatusNoContent)
 			return
 		}
-		next.ServeHTTP(w, r)
-	})
+		c.Next()
+	}
 }
 
-// statusForError maps domain errors into the public HTTP status codes used by the UI.
 func statusForError(err error) int {
 	switch {
 	case errors.Is(err, wallet.ErrInvalidAddress):
@@ -233,14 +227,6 @@ func statusForError(err error) int {
 	}
 }
 
-// writeJSON writes a JSON response with the given HTTP status code.
-func writeJSON(w http.ResponseWriter, status int, value any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(value)
-}
-
-// writeError writes the standard API error envelope.
-func writeError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
+func writeError(c *gin.Context, status int, message string) {
+	c.JSON(status, gin.H{"error": message})
 }

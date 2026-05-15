@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"net/http"
 
 	"sunways-asset/backend/internal/auth"
 	"sunways-asset/backend/internal/config"
@@ -28,7 +27,7 @@ func main() {
 	server := httpapi.NewServer(walletSvc, authSvc, store, cfg.FrontendOrigin)
 
 	log.Printf("api listening on %s", cfg.APIAddr)
-	if err := http.ListenAndServe(cfg.APIAddr, server.Handler()); err != nil {
+	if err := server.Router().Run(cfg.APIAddr); err != nil {
 		log.Fatal(err)
 	}
 }

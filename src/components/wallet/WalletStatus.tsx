@@ -52,45 +52,42 @@ export function WalletStatus() {
   } = useRequiredChain();
 
   return (
-    <section className="w-full rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+    <section className="w-full rounded-lg border border-zinc-200 bg-white shadow-sm">
+      <div className="border-b border-zinc-200 px-5 py-4">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">
-            Wallet
+          <p className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
+            Sunways Asset
           </p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight text-zinc-950">
-            Sunways Asset Console
+            Energy Asset Operations
           </h1>
           <p className="mt-3 max-w-2xl text-base leading-7 text-zinc-600">
-            Connect a wallet and switch to the local Anvil network before
-            starting asset registration, indexing, and settlement flows.
+            Power station NFTs, revenue settlement, carbon credits, and green
+            certificates on the local development chain.
           </p>
-        </div>
-        <div className="shrink-0">
-          <ConnectButton />
         </div>
       </div>
 
-      <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-lg border border-zinc-200 p-4">
+      <div className="grid gap-0 md:grid-cols-2 xl:grid-cols-4">
+        <div className="border-b border-zinc-200 p-5 md:border-r xl:border-b-0">
           <p className="text-sm text-zinc-500">Account</p>
           <p className="mt-2 break-all font-mono text-sm font-semibold text-zinc-950">
             {address ? shortAddress(address) : "Not connected"}
           </p>
         </div>
-        <div className="rounded-lg border border-zinc-200 p-4">
+        <div className="border-b border-zinc-200 p-5 xl:border-b-0 xl:border-r">
           <p className="text-sm text-zinc-500">Connector</p>
           <p className="mt-2 text-sm font-semibold text-zinc-950">
             {connector?.name ?? "None"}
           </p>
         </div>
-        <div className="rounded-lg border border-zinc-200 p-4">
+        <div className="border-b border-zinc-200 p-5 md:border-r md:border-b-0">
           <p className="text-sm text-zinc-500">Current Chain</p>
           <p className="mt-2 font-mono text-sm font-semibold text-zinc-950">
             {chainId}
           </p>
         </div>
-        <div className="rounded-lg border border-zinc-200 p-4">
+        <div className="p-5">
           <p className="text-sm text-zinc-500">Required Chain</p>
           <p className="mt-2 text-sm font-semibold text-zinc-950">
             {requiredChain.name} ({requiredChain.id})
@@ -98,36 +95,53 @@ export function WalletStatus() {
         </div>
       </div>
 
-      <div className="mt-5 flex flex-col gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-        {isConnected ? (
-          isRequiredChain ? (
-            <StatusPill tone="success">Connected to local Anvil</StatusPill>
-          ) : (
-            <StatusPill tone="warning">Wrong network selected</StatusPill>
-          )
-        ) : (
-          <StatusPill>Wallet not connected</StatusPill>
-        )}
-
-        {isConnected && !isRequiredChain ? (
-          <button
-            className="inline-flex min-h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
-            disabled={isSwitching}
-            type="button"
-            onClick={switchToRequiredChain}
-          >
-            {isSwitching ? "Switching..." : "Switch to Anvil"}
-          </button>
-        ) : null}
+      <div className="border-t border-zinc-200 bg-zinc-50 px-5 py-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-semibold text-zinc-950">
+                Step 1 · Connect Wallet
+              </p>
+              {isConnected ? (
+                isRequiredChain ? (
+                  <StatusPill tone="success">Ready on Anvil</StatusPill>
+                ) : (
+                  <StatusPill tone="warning">Wrong network</StatusPill>
+                )
+              ) : (
+                <StatusPill>Wallet not connected</StatusPill>
+              )}
+            </div>
+            <p className="mt-2 text-sm leading-6 text-zinc-600">
+              Use RainbowKit to select MetaMask, WalletConnect, or another
+              available wallet provider.
+            </p>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <ConnectButton />
+            {isConnected && !isRequiredChain ? (
+              <button
+                className="inline-flex min-h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
+                disabled={isSwitching}
+                type="button"
+                onClick={switchToRequiredChain}
+              >
+                {isSwitching ? "Switching..." : "Switch to Anvil"}
+              </button>
+            ) : null}
+          </div>
+        </div>
       </div>
 
       {error ? (
-        <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p className="mx-5 mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {error.message}
         </p>
       ) : null}
 
-      <SignatureLogin canLogin={isConnected && isRequiredChain} />
+      <div className="px-5 pb-5">
+        <SignatureLogin canLogin={isConnected && isRequiredChain} />
+      </div>
     </section>
   );
 }

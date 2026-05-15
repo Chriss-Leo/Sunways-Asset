@@ -1,4 +1,6 @@
 import Head from "next/head";
+import { PowerStationPanel } from "@/components/contracts/PowerStationPanel";
+import { PortfolioOverview } from "@/components/dashboard/PortfolioOverview";
 import { WalletStatus } from "@/components/wallet/WalletStatus";
 
 /**
@@ -14,39 +16,41 @@ export default function Home() {
           content="Wallet connection console for Sunways Web3 energy assets"
         />
       </Head>
-      <main className="flex min-h-screen flex-1 bg-[#f6f7f2] px-4 py-6 font-sans text-zinc-950 sm:px-6 lg:px-8">
-        <section className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+      <main className="flex min-h-screen flex-1 bg-zinc-100 px-4 py-6 font-sans text-zinc-950 sm:px-6 lg:px-8">
+        <section className="mx-auto flex w-full max-w-7xl flex-col gap-6">
           <WalletStatus />
+          <PortfolioOverview />
+          <PowerStationPanel />
 
           <section className="grid gap-4 lg:grid-cols-3">
             <div className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
               <p className="text-sm font-medium text-zinc-500">Step</p>
               <h2 className="mt-2 text-xl font-semibold text-zinc-950">
-                P1 Wallet Connection
+                P4 Mock Console
               </h2>
               <p className="mt-3 text-sm leading-6 text-zinc-600">
-                This screen validates wallet connection and local Anvil network
-                readiness before signature login and contract calls are added.
+                Missing chain and indexed values now fall back to dashboard mock
+                data so the product surface stays complete during integration.
               </p>
             </div>
             <div className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-              <p className="text-sm font-medium text-zinc-500">Local RPC</p>
+              <p className="text-sm font-medium text-zinc-500">Live Reads</p>
               <p className="mt-2 font-mono text-sm font-semibold text-zinc-950">
-                http://127.0.0.1:8545
+                PowerStationNFT.name()
               </p>
               <p className="mt-3 text-sm leading-6 text-zinc-600">
-                Start Anvil with chain ID 31337 before switching your wallet to
-                the local development network.
+                The page reads deployed contract identity from Anvil and blends
+                it with mock operational values until indexing is ready.
               </p>
             </div>
             <div className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
               <p className="text-sm font-medium text-zinc-500">Next</p>
               <h2 className="mt-2 text-xl font-semibold text-zinc-950">
-                P3 Contract Config
+                Event Indexer
               </h2>
               <p className="mt-3 text-sm leading-6 text-zinc-600">
-                After wallet login is stable, the next step is sharing local
-                deployment addresses and ABI between frontend and backend.
+                Build the backend listener for station registration, revenue
+                deposits, carbon credit minting, and certificate issuance.
               </p>
             </div>
           </section>

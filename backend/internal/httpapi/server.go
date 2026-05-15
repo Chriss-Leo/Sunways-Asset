@@ -4,25 +4,36 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"sunways-asset/backend/internal/auth"
+	"sunways-asset/backend/internal/repository"
 	"sunways-asset/backend/internal/wallet"
+
+	"gorm.io/gorm"
 )
 
 // Server wires HTTP routes to wallet nonce and auth-session services.
 type Server struct {
 	auth           *auth.Service
 	frontendOrigin string
+	store          *repository.Store
 	wallet         *wallet.Service
 }
 
 // NewServer constructs the API server with the allowed frontend origin for CORS.
-func NewServer(walletSvc *wallet.Service, authSvc *auth.Service, frontendOrigin string) *Server {
+func NewServer(
+	walletSvc *wallet.Service,
+	authSvc *auth.Service,
+	store *repository.Store,
+	frontendOrigin string,
+) *Server {
 	return &Server{
 		auth:           authSvc,
 		frontendOrigin: frontendOrigin,
+		store:          store,
 		wallet:         walletSvc,
 	}
 }
@@ -35,6 +46,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /auth/verify", s.verify)
 	mux.HandleFunc("GET /auth/me", s.me)
 	mux.HandleFunc("POST /auth/logout", s.logout)
+	mux.HandleFunc("GET /stations", s.listStations)
+	mux.HandleFunc("GET /stations/{id}", s.getStation)
+	mux.HandleFunc("GET /dashboard/summary", s.dashboardSummary)
 
 	return s.withCORS(mux)
 }
@@ -117,6 +131,51 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 		s.auth.Delete(token)
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (s *Server) listStations(w http.ResponseWriter, r *http.Request) {
+	limit := 50
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid limit")
+			return
+		}
+		limit = parsed
+	}
+	stations, err := s.store.ListStations(limit)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list stations")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": stations})
+}
+
+func (s *Server) getStation(w http.ResponseWriter, r *http.Request) {
+	stationID, err := strconv.ParseUint(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid station id")
+		return
+	}
+	station, err := s.store.GetStation(stationID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			writeError(w, http.StatusNotFound, "station not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to get station")
+		return
+	}
+	writeJSON(w, http.StatusOK, station)
+}
+
+func (s *Server) dashboardSummary(w http.ResponseWriter, _ *http.Request) {
+	summary, err := s.store.DashboardSummary()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load dashboard summary")
+		return
+	}
+	writeJSON(w, http.StatusOK, summary)
 }
 
 // sessionFromRequest extracts and validates a bearer session, writing an HTTP error on failure.

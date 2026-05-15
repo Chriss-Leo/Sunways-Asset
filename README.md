@@ -147,6 +147,13 @@ cd backend
 go run ./cmd/api
 ```
 
+Run the chain event indexer:
+
+```bash
+cd backend
+go run ./cmd/indexer
+```
+
 Run contract tests:
 
 ```bash

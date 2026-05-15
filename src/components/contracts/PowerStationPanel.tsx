@@ -1,8 +1,10 @@
 import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useChainId, useReadContract } from "wagmi";
 import { requiredChain } from "@/config/chains";
 import { sunwaysContracts, sunwaysLocalDeployment } from "@/contracts/sunways";
 import { mockStation } from "@/data/mockDashboard";
+import { getStation } from "@/services/dashboard";
 
 const firstStationId = BigInt(1);
 
@@ -75,6 +77,12 @@ function stationFields(data: unknown) {
 }
 
 export function PowerStationPanel() {
+  const backendStation = useQuery({
+    queryKey: ["station", 1],
+    queryFn: () => getStation(1),
+    retry: false,
+    refetchInterval: 10_000,
+  });
   const chainId = useChainId();
   const isLocalChain = chainId === requiredChain.id;
   const powerStation = sunwaysContracts.PowerStationNFT;
@@ -111,26 +119,40 @@ export function PowerStationPanel() {
     stationQuery.data,
   ]);
   const hasFirstStation = Boolean(station && ownerQuery.data);
-  const displayStation = hasFirstStation
+  const hasBackendStation = Boolean(backendStation.data);
+  const displayStation = hasBackendStation
     ? {
-        name: station?.name ?? "N/A",
-        region: station?.region ?? "N/A",
+        name: backendStation.data?.name ?? "N/A",
+        region: backendStation.data?.region ?? "N/A",
+        owner: backendStation.data?.owner ?? mockStation.owner,
+        capacityKw: Number(backendStation.data?.capacityKw ?? 0),
+        commissionedAt:
+          backendStation.data?.commissionedAt?.slice(0, 10) ??
+          mockStation.commissionedAt,
+        status: backendStation.data?.status ?? "N/A",
+        source: "Backend",
+      }
+    : hasFirstStation
+      ? {
+          name: station?.name ?? "N/A",
+          region: station?.region ?? "N/A",
         owner:
           typeof ownerQuery.data === "string" ? ownerQuery.data : mockStation.owner,
         capacityKw: station?.capacityKw,
         commissionedAt: station?.commissionedAt,
-        status: statusLabel(station?.status),
-        source: "On-chain",
-      }
-    : {
-        name: mockStation.name,
-        region: mockStation.region,
-        owner: mockStation.owner,
-        capacityKw: mockStation.capacityKw,
-        commissionedAt: mockStation.commissionedAt,
-        status: mockStation.status,
-        source: "Mock",
-      };
+          status: statusLabel(station?.status),
+          source: "On-chain",
+        }
+      : {
+          name: mockStation.name,
+          region: mockStation.region,
+          owner: mockStation.owner,
+          capacityKw: mockStation.capacityKw,
+          commissionedAt: mockStation.commissionedAt,
+          status: mockStation.status,
+          source: "Mock",
+        };
+  const isLiveData = hasBackendStation || hasFirstStation;
 
   return (
     <section className="rounded-lg border border-zinc-200 bg-white shadow-sm">
@@ -148,7 +170,7 @@ export function PowerStationPanel() {
         </div>
         <span
           className={`inline-flex min-h-8 items-center rounded-full border px-3 text-sm font-medium ${
-            hasFirstStation
+            isLiveData
               ? "border-emerald-200 bg-emerald-50 text-emerald-700"
               : "border-amber-200 bg-amber-50 text-amber-800"
           }`}
@@ -229,6 +251,11 @@ export function PowerStationPanel() {
           {!isLocalChain ? (
             <p className="mt-5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
               Switch to Anvil Local to read live contract state.
+            </p>
+          ) : null}
+          {isLocalChain && !isLiveData ? (
+            <p className="mt-5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Backend and chain data are not available yet, so the station card is using demo values.
             </p>
           ) : null}
         </div>

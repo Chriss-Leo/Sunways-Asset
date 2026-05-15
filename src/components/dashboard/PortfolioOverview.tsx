@@ -1,4 +1,5 @@
 import { formatEther } from "viem";
+import { useQuery } from "@tanstack/react-query";
 import { useChainId, useReadContract } from "wagmi";
 import { requiredChain } from "@/config/chains";
 import {
@@ -8,6 +9,7 @@ import {
   sunwaysContracts,
 } from "@/contracts/sunways";
 import { contractRows, mockStation, portfolioMetrics } from "@/data/mockDashboard";
+import { getDashboardSummary } from "@/services/dashboard";
 
 const stationId = BigInt(1);
 const certificateId = BigInt(1);
@@ -26,6 +28,28 @@ function formatTokenAmount(value: unknown, suffix: string) {
   return `${formatted} ${suffix}`;
 }
 
+function formatWeiString(value: string | undefined) {
+  if (!value) {
+    return null;
+  }
+  return `${Number(formatEther(BigInt(value))).toLocaleString(undefined, {
+    maximumFractionDigits: 2,
+  })} ETH`;
+}
+
+function formatTokenString(value: string | undefined, suffix: string) {
+  if (!value) {
+    return null;
+  }
+  return `${Number(formatEther(BigInt(value))).toLocaleString(undefined, {
+    maximumFractionDigits: 2,
+  })} ${suffix}`;
+}
+
+function hasNonZero(value: string | undefined) {
+  return Boolean(value && value !== "0");
+}
+
 function formatCount(value: unknown) {
   if (typeof value !== "bigint") {
     return null;
@@ -41,6 +65,12 @@ const toneClass = {
 } as const;
 
 export function PortfolioOverview() {
+  const summaryQuery = useQuery({
+    queryKey: ["dashboard-summary"],
+    queryFn: getDashboardSummary,
+    retry: false,
+    refetchInterval: 10_000,
+  });
   const chainId = useChainId();
   const isLocalChain = chainId === requiredChain.id;
   const query = {
@@ -82,23 +112,55 @@ export function PortfolioOverview() {
   const metrics = [
     {
       ...portfolioMetrics[0],
-      source: typeof ownerQuery.data === "string" ? "On-chain" : "Mock",
+      value:
+        summaryQuery.data && summaryQuery.data.stations > 0
+          ? summaryQuery.data.stations.toLocaleString()
+          : portfolioMetrics[0].value,
+      source:
+        summaryQuery.data && summaryQuery.data.stations > 0
+          ? "Backend"
+          : typeof ownerQuery.data === "string"
+            ? "On-chain"
+            : "Mock",
     },
     {
       ...portfolioMetrics[1],
       value:
-        formatTokenAmount(revenueQuery.data, "ETH") ?? portfolioMetrics[1].value,
-      source: typeof revenueQuery.data === "bigint" ? "On-chain" : "Mock",
+        formatWeiString(summaryQuery.data?.totalRevenueWei) ??
+        formatTokenAmount(revenueQuery.data, "ETH") ??
+        portfolioMetrics[1].value,
+      source:
+        hasNonZero(summaryQuery.data?.totalRevenueWei)
+          ? "Backend"
+          : typeof revenueQuery.data === "bigint"
+            ? "On-chain"
+            : "Mock",
     },
     {
       ...portfolioMetrics[2],
-      value: formatTokenAmount(carbonQuery.data, "SWC") ?? portfolioMetrics[2].value,
-      source: typeof carbonQuery.data === "bigint" ? "On-chain" : "Mock",
+      value:
+        formatTokenString(summaryQuery.data?.totalCarbonAmount, "SWC") ??
+        formatTokenAmount(carbonQuery.data, "SWC") ??
+        portfolioMetrics[2].value,
+      source:
+        hasNonZero(summaryQuery.data?.totalCarbonAmount)
+          ? "Backend"
+          : typeof carbonQuery.data === "bigint"
+            ? "On-chain"
+            : "Mock",
     },
     {
       ...portfolioMetrics[3],
-      value: formatCount(certificateQuery.data) ?? portfolioMetrics[3].value,
-      source: typeof certificateQuery.data === "bigint" ? "On-chain" : "Mock",
+      value:
+        hasNonZero(summaryQuery.data?.totalCertificates)
+          ? Number(summaryQuery.data?.totalCertificates).toLocaleString()
+          : formatCount(certificateQuery.data) ?? portfolioMetrics[3].value,
+      source:
+        hasNonZero(summaryQuery.data?.totalCertificates)
+          ? "Backend"
+          : typeof certificateQuery.data === "bigint"
+            ? "On-chain"
+            : "Mock",
     },
   ];
 

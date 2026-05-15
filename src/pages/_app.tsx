@@ -18,7 +18,11 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+/**
+ * Global Pages Router app shell that wires wallet, query, and font providers once.
+ */
 export default function App({ Component, pageProps }: AppProps) {
+  // Create one QueryClient per browser session so React Query cache survives route changes.
   const [queryClient] = useState(() => new QueryClient());
 
   return (

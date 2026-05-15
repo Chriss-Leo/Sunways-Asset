@@ -14,11 +14,15 @@ import (
 )
 
 var (
+	// ErrInvalidAddress indicates an address that is not valid Ethereum hex.
 	ErrInvalidAddress = errors.New("invalid wallet address")
-	ErrInvalidNonce   = errors.New("invalid or expired nonce")
-	ErrInvalidSig     = errors.New("invalid wallet signature")
+	// ErrInvalidNonce indicates a missing, reused, or expired sign-in nonce.
+	ErrInvalidNonce = errors.New("invalid or expired nonce")
+	// ErrInvalidSig indicates a signature that cannot be recovered to the requested wallet.
+	ErrInvalidSig = errors.New("invalid wallet signature")
 )
 
+// Nonce is the one-time challenge a wallet signs to start an authenticated session.
 type Nonce struct {
 	Address   string
 	Value     string
@@ -27,6 +31,7 @@ type Nonce struct {
 	Used      bool
 }
 
+// Service manages wallet login nonces in memory.
 type Service struct {
 	mu     sync.Mutex
 	ttl    time.Duration
@@ -34,6 +39,7 @@ type Service struct {
 	now    func() time.Time
 }
 
+// NewService constructs an in-memory wallet nonce service with the configured TTL.
 func NewService(ttl time.Duration) *Service {
 	return &Service{
 		ttl:    ttl,
@@ -42,6 +48,7 @@ func NewService(ttl time.Duration) *Service {
 	}
 }
 
+// CreateNonce normalizes an address and creates the exact message that must be signed.
 func (s *Service) CreateNonce(address string) (Nonce, error) {
 	normalized, err := normalizeAddress(address)
 	if err != nil {
@@ -68,6 +75,7 @@ func (s *Service) CreateNonce(address string) (Nonce, error) {
 	return nonce, nil
 }
 
+// Verify consumes the active nonce for an address and validates its Ethereum personal signature.
 func (s *Service) Verify(address string, signature string) error {
 	normalized, err := normalizeAddress(address)
 	if err != nil {
@@ -95,6 +103,7 @@ func (s *Service) Verify(address string, signature string) error {
 	return nil
 }
 
+// buildLoginMessage creates a human-readable challenge shown by the wallet signing prompt.
 func buildLoginMessage(address string, nonce string, expiresAt time.Time) string {
 	return fmt.Sprintf(
 		"Sunways Asset wants you to sign in with your Ethereum account:\n%s\n\nNonce: %s\nExpires At: %s",
@@ -104,6 +113,7 @@ func buildLoginMessage(address string, nonce string, expiresAt time.Time) string
 	)
 }
 
+// normalizeAddress validates and checksum-normalizes an Ethereum address.
 func normalizeAddress(address string) (string, error) {
 	if !common.IsHexAddress(address) {
 		return "", ErrInvalidAddress
@@ -111,6 +121,7 @@ func normalizeAddress(address string) (string, error) {
 	return common.HexToAddress(address).Hex(), nil
 }
 
+// randomHex returns cryptographically secure random bytes encoded as lowercase hex.
 func randomHex(size int) (string, error) {
 	bytes := make([]byte, size)
 	if _, err := rand.Read(bytes); err != nil {
@@ -119,6 +130,7 @@ func randomHex(size int) (string, error) {
 	return hex.EncodeToString(bytes), nil
 }
 
+// recoverAddress verifies Ethereum Signed Message semantics and returns the signing address.
 func recoverAddress(message string, signature string) (string, error) {
 	raw := common.FromHex(signature)
 	if len(raw) != 65 {
@@ -131,6 +143,7 @@ func recoverAddress(message string, signature string) (string, error) {
 		return "", ErrInvalidSig
 	}
 
+	// Match wallet_sign / personal_sign prefixing so the recovered address equals the UI signer.
 	hash := crypto.Keccak256Hash([]byte(fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(message), message)))
 	pubKey, err := crypto.SigToPub(hash.Bytes(), raw)
 	if err != nil {

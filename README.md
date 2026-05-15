@@ -14,7 +14,7 @@ Sunways Asset aims to turn real or simulated energy assets into traceable digita
 - Device and oracle data should be auditable and linked to specific assets.
 - Revenue settlement and P2P trading should be built on top of verified asset, identity, and event data.
 
-This repository is organized as a product-oriented monorepo, with the frontend and backend already present and room for Foundry contracts to be added under `contracts/`.
+This repository is organized as a product-oriented monorepo, with the frontend, backend, and Foundry contracts under `contracts/`.
 
 ## Development Goals
 
@@ -52,6 +52,17 @@ sunways-asset/
       wallet/              # Wallet nonce and signature verification
     go.mod
 
+  contracts/
+    src/
+      PowerStationNFT.sol   # ERC-721 power station identity
+      RevenueVault.sol      # Native revenue deposit and claim flow
+      CarbonCreditToken.sol # ERC-20 carbon credits
+      GreenCertificate.sol  # ERC-1155 green certificates
+    script/
+      DeploySunways.s.sol
+    test/
+      SunwaysCore.t.sol
+
   src/
     components/
       wallet/              # Wallet connection and signature login UI
@@ -65,11 +76,9 @@ sunways-asset/
   public/                  # Static assets
 ```
 
-Planned contract and backend domains:
+Planned backend domains:
 
 ```text
-contracts/                 # Foundry smart contracts
-
 backend/internal/
   nft/                     # Energy NFT and asset registry business logic
   oracle/                  # Device data ingestion and on-chain anchoring
@@ -88,8 +97,9 @@ The project currently supports:
 - Signing the nonce message with the wallet.
 - Verifying the signature in the Go backend.
 - Creating a temporary backend session.
+- Compiling and testing a first Foundry contract layer for power station NFTs, native revenue claims, carbon credits, and green certificates.
 
-The next major area is the smart contract foundation for energy asset registration and frontend/backend integration around deployed contract addresses and ABI files.
+The next major area is local Anvil deployment, generated ABI/address config, and frontend/backend integration around the deployed contract addresses.
 
 ## Disclaimer
 

@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Vendored Solidity dependencies include upstream JS tooling that is not part of this app.
+    "contracts/lib/**",
   ]),
 ]);
 

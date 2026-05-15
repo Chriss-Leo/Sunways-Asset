@@ -11,12 +11,14 @@ import (
 	"sunways-asset/backend/internal/wallet"
 )
 
+// Server wires HTTP routes to wallet nonce and auth-session services.
 type Server struct {
 	auth           *auth.Service
 	frontendOrigin string
 	wallet         *wallet.Service
 }
 
+// NewServer constructs the API server with the allowed frontend origin for CORS.
 func NewServer(walletSvc *wallet.Service, authSvc *auth.Service, frontendOrigin string) *Server {
 	return &Server{
 		auth:           authSvc,
@@ -25,6 +27,7 @@ func NewServer(walletSvc *wallet.Service, authSvc *auth.Service, frontendOrigin 
 	}
 }
 
+// Handler returns the full HTTP handler tree, including route registration and CORS.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", s.health)
@@ -36,10 +39,12 @@ func (s *Server) Handler() http.Handler {
 	return s.withCORS(mux)
 }
 
+// health reports process readiness for local checks and container probes.
 func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+// createNonce issues a one-time wallet-signature challenge for a supplied address.
 func (s *Server) createNonce(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Address string `json:"address"`
@@ -63,6 +68,7 @@ func (s *Server) createNonce(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// verify validates the wallet signature and exchanges it for an API bearer session.
 func (s *Server) verify(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Address   string `json:"address"`
@@ -91,6 +97,7 @@ func (s *Server) verify(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// me returns the active authenticated wallet session.
 func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 	session, ok := s.sessionFromRequest(w, r)
 	if !ok {
@@ -103,6 +110,7 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// logout invalidates a bearer session if the caller provided one.
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	token, ok := bearerToken(r)
 	if ok {
@@ -111,6 +119,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+// sessionFromRequest extracts and validates a bearer session, writing an HTTP error on failure.
 func (s *Server) sessionFromRequest(w http.ResponseWriter, r *http.Request) (auth.Session, bool) {
 	token, ok := bearerToken(r)
 	if !ok {
@@ -127,12 +136,14 @@ func (s *Server) sessionFromRequest(w http.ResponseWriter, r *http.Request) (aut
 	return session, true
 }
 
+// bearerToken parses the Authorization header value expected by the frontend service.
 func bearerToken(r *http.Request) (string, bool) {
 	value := r.Header.Get("Authorization")
 	token, ok := strings.CutPrefix(value, "Bearer ")
 	return token, ok && token != ""
 }
 
+// withCORS allows the configured frontend to call the local API with JSON and bearer tokens.
 func (s *Server) withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
@@ -149,6 +160,7 @@ func (s *Server) withCORS(next http.Handler) http.Handler {
 	})
 }
 
+// statusForError maps domain errors into the public HTTP status codes used by the UI.
 func statusForError(err error) int {
 	switch {
 	case errors.Is(err, wallet.ErrInvalidAddress):
@@ -162,12 +174,14 @@ func statusForError(err error) int {
 	}
 }
 
+// writeJSON writes a JSON response with the given HTTP status code.
 func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
 }
 
+// writeError writes the standard API error envelope.
 func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]string{"error": message})
 }

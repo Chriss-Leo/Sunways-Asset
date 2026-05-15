@@ -12,6 +12,7 @@ import (
 )
 
 func main() {
+	// Keep local development zero-config while still allowing deployment-time overrides.
 	addr := env("API_ADDR", ":8080")
 	frontendOrigin := env("FRONTEND_ORIGIN", "http://localhost:3000")
 	nonceTTL := durationEnv("WALLET_NONCE_TTL", 5*time.Minute)
@@ -27,6 +28,7 @@ func main() {
 	}
 }
 
+// env reads a string environment variable and falls back when it is unset.
 func env(key string, fallback string) string {
 	value := os.Getenv(key)
 	if value == "" {
@@ -35,6 +37,7 @@ func env(key string, fallback string) string {
 	return value
 }
 
+// durationEnv reads a Go duration environment variable such as "5m" or "24h".
 func durationEnv(key string, fallback time.Duration) time.Duration {
 	value := os.Getenv(key)
 	if value == "" {

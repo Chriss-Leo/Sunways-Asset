@@ -4,10 +4,16 @@ import { useAccount, useChainId } from "wagmi";
 import { useRequiredChain } from "@/hooks/useRequiredChain";
 import { SignatureLogin } from "./SignatureLogin";
 
+/**
+ * Keeps wallet addresses readable while preserving enough prefix/suffix for recognition.
+ */
 function shortAddress(address: `0x${string}`) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
+/**
+ * Compact status badge used for connection and network readiness states.
+ */
 function StatusPill({
   children,
   tone = "neutral",
@@ -31,6 +37,9 @@ function StatusPill({
   );
 }
 
+/**
+ * Wallet readiness panel for the local Anvil development flow.
+ */
 export function WalletStatus() {
   const { address, connector, isConnected } = useAccount();
   const chainId = useChainId();

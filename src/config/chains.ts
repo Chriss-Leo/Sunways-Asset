@@ -1,5 +1,8 @@
 import { defineChain } from "viem";
 
+/**
+ * Local Anvil chain used by the development wallet, frontend, and backend examples.
+ */
 export const anvil = defineChain({
   id: 31337,
   name: "Anvil Local",
@@ -15,4 +18,7 @@ export const anvil = defineChain({
   },
 });
 
+/**
+ * Single network the current console expects before contract interactions are enabled.
+ */
 export const requiredChain = anvil;

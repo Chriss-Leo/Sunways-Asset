@@ -1,8 +1,10 @@
 # Sunways Asset 开发步骤说明文档
 
-更新时间：2026-05-14
+更新时间：2026-05-15
 
-本文档面向当前 `sunways-asset` 项目的逐步开发。当前仓库主要是 Next.js 前端壳，依赖已经包含 `next@16.2.6`、React 19、wagmi、viem、RainbowKit、Tailwind CSS 4；合约工程和 Go 后端暂未出现在本仓库根目录。下面按“本地链优先闭环、后端索引业务化、前端产品化、再上测试网/主网”的顺序推进。
+本文档面向当前 `sunways-asset` 项目的逐步开发。当前仓库已经包含 Next.js 前端、Go 后端和 `contracts/` Foundry 合约工程；依赖包含 `next@16.2.6`、React 19、wagmi、viem、RainbowKit、Tailwind CSS 4。下面按“本地链优先闭环、后端索引业务化、前端产品化、再上测试网/主网”的顺序推进。
+
+当前进度：P1 钱包连接、P2 钱包签名登录已完成；P3 合约基础已开始，第一版合约覆盖电站 NFT、收益分红、碳积分和绿色节能证书。
 
 > 说明：能源资产、RWA、收益权、碳资产、证券属性等可能涉及合规要求。本文是工程开发路线，不构成法律、金融或投资建议。
 
@@ -450,16 +452,16 @@ security:
 
 ### M1：本地链资产闭环
 
-- [ ] `contracts/` Foundry 工程完成。
+- [x] `contracts/` Foundry 工程完成。
 - [ ] Anvil 本地链固定 chain id。
-- [ ] `AssetRegistry` 可注册资产。
-- [ ] 部署脚本输出合约地址。
-- [ ] 前端可连接本地链。
+- [x] `PowerStationNFT` 可注册电站资产。
+- [x] 部署脚本可部署第一组合约。
+- [x] 前端可连接本地链。
 - [ ] 首页显示链 ID、账户、资产列表。
 
 ### M2：收益闭环
 
-- [ ] `RevenueVault` 支持充值和领取。
+- [x] `RevenueVault` 支持充值和领取。
 - [ ] Foundry 测试覆盖收益守恒。
 - [ ] Go indexer 可监听收益事件。
 - [ ] 前端显示可领取收益。
@@ -988,17 +990,17 @@ internal/blockchain/tx
 
 ## 14. 当前最应该做的下一步
 
-你的下一步应该先做 **P1 钱包连接**，因为当前前端项目已经有 wagmi、viem、RainbowKit、TanStack Query 依赖，最适合作为第一个可见成果。
+你的下一步应该做 **P3 本地部署与 ABI/地址同步**。P1 钱包连接、P2 钱包签名登录已经完成，第一版合约也已经能通过 Foundry 测试；现在要把合约部署到 Anvil，并把地址和 ABI 交给前端/后端使用。
 
 具体执行顺序：
 
-1. 配置本地 Anvil chain：`31337`、`http://127.0.0.1:8545`。
-2. 在 `_app.tsx` 接入 `WagmiProvider`、`QueryClientProvider`、`RainbowKitProvider`。
-3. 新建钱包状态组件，显示连接按钮、账户、网络、链是否正确。
-4. 首页先改成“钱包连接 + 本地链状态”。
-5. 验收钱包连接稳定后，再做 P2 签名登录。
+1. 启动 Anvil：`anvil --chain-id 31337`。
+2. 运行 `contracts/script/DeploySunways.s.sol` 部署电站 NFT、收益金库、碳积分、绿证合约。
+3. 把部署地址写入共享配置，例如 `config/chains.local.json`。
+4. 抽取 ABI 到 `src/contracts/`，让前端用 wagmi/viem 读取电站 NFT。
+5. 后端增加 `internal/blockchain` 基础层，为事件监听和地址配置做准备。
 
-这一步完成后，你再进入后端 `internal/wallet`，做 nonce、签名校验和 session。这样前端和后端的 wallet 模块能自然接起来。
+这一步完成后，首页就可以从“钱包状态页”升级成“电站资产控制台”的第一版。
 
 ## 15. 参考资料
 

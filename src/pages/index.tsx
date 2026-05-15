@@ -1,6 +1,9 @@
 import Head from "next/head";
 import { WalletStatus } from "@/components/wallet/WalletStatus";
 
+/**
+ * Development console landing page for validating wallet and local-chain readiness.
+ */
 export default function Home() {
   return (
     <>

@@ -12,9 +12,13 @@ import {
 } from "@/services/auth";
 
 type SignatureLoginProps = {
+  /** Whether wallet and network prerequisites are satisfied. */
   canLogin: boolean;
 };
 
+/**
+ * Performs nonce-based wallet login against the backend auth endpoints.
+ */
 export function SignatureLogin({ canLogin }: SignatureLoginProps) {
   const { address, isConnected } = useAccount();
   const { signMessageAsync } = useSignMessage();
@@ -23,6 +27,7 @@ export function SignatureLogin({ canLogin }: SignatureLoginProps) {
   const [session, setSession] = useState<MeResponse | null>(null);
 
   useEffect(() => {
+    // Restore a previous bearer session after refresh and drop it if the backend rejects it.
     const token = getStoredSessionToken();
     if (!token) {
       return;
@@ -33,9 +38,12 @@ export function SignatureLogin({ canLogin }: SignatureLoginProps) {
       .catch(() => {
         clearSessionToken();
         setSession(null);
-      });
+    });
   }, []);
 
+  /**
+   * Requests a backend nonce, asks the connected wallet to sign it, and stores the session token.
+   */
   async function handleLogin() {
     if (!address) {
       return;
@@ -61,6 +69,9 @@ export function SignatureLogin({ canLogin }: SignatureLoginProps) {
     }
   }
 
+  /**
+   * Clears local state immediately, then best-effort invalidates the backend session.
+   */
   async function handleLogout() {
     const token = getStoredSessionToken();
     clearSessionToken();

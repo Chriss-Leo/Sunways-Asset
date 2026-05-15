@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/big"
 	"strings"
 	"time"
@@ -35,6 +36,10 @@ const revenueVaultABI = `[
     {"name":"payer","type":"address","indexed":true},
     {"name":"beneficiary","type":"address","indexed":true},
     {"name":"amount","type":"uint256","indexed":false}
+  ]},
+  {"type":"event","name":"RevenueClaimed","inputs":[
+    {"name":"account","type":"address","indexed":true},
+    {"name":"amount","type":"uint256","indexed":false}
   ]}
 ]`
 
@@ -44,6 +49,11 @@ const carbonCreditABI = `[
     {"name":"amount","type":"uint256","indexed":false},
     {"name":"stationId","type":"uint256","indexed":true},
     {"name":"evidenceURI","type":"string","indexed":false}
+  ]},
+  {"type":"event","name":"Transfer","inputs":[
+    {"name":"from","type":"address","indexed":true},
+    {"name":"to","type":"address","indexed":true},
+    {"name":"value","type":"uint256","indexed":false}
   ]}
 ]`
 
@@ -65,6 +75,14 @@ type Indexer struct {
 	store   *repository.Store
 	abis    map[string]abi.ABI
 	address map[common.Address]string
+}
+
+type RunOptions struct {
+	PollInterval  time.Duration
+	Confirmations uint64
+	BatchSize     uint64
+	RetryDelay    time.Duration
+	Once          bool
 }
 
 func New(chain blockchain.Config, client *ethclient.Client, store *repository.Store) (*Indexer, error) {
@@ -116,6 +134,101 @@ func (i *Indexer) Scan(ctx context.Context, fromBlock uint64, toBlock *big.Int) 
 			return err
 		}
 	}
+	if err := i.store.RebuildUserAssetSummary(i.chain.ChainID); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (i *Indexer) Run(ctx context.Context, options RunOptions) error {
+	if options.PollInterval <= 0 {
+		options.PollInterval = 3 * time.Second
+	}
+	if options.BatchSize == 0 {
+		options.BatchSize = 500
+	}
+	if options.RetryDelay <= 0 {
+		options.RetryDelay = 2 * time.Second
+	}
+
+	for {
+		if err := i.indexOnce(ctx, options); err != nil {
+			latest, _ := i.client.BlockNumber(ctx)
+			_ = i.store.MarkIndexerFailure(i.chain.ChainID, "default", latest, options.Confirmations, err.Error())
+			log.Printf("indexer error: %v", err)
+			if options.Once {
+				return err
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(options.RetryDelay):
+				continue
+			}
+		}
+		if options.Once {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(options.PollInterval):
+		}
+	}
+}
+
+func (i *Indexer) indexOnce(ctx context.Context, options RunOptions) error {
+	latest, err := i.client.BlockNumber(ctx)
+	if err != nil {
+		return err
+	}
+	if err := i.store.MarkIndexerStart(i.chain.ChainID, "default", latest, options.Confirmations); err != nil {
+		return err
+	}
+
+	target := latest
+	if target > options.Confirmations {
+		target -= options.Confirmations
+	} else {
+		target = 0
+	}
+
+	state, err := i.store.GetIndexerState(i.chain.ChainID, "default")
+	if err != nil {
+		state.LastIndexedBlock = 0
+	}
+	if target <= state.LastIndexedBlock {
+		return nil
+	}
+
+	from := state.LastIndexedBlock + 1
+	if state.LastIndexedBlock == 0 {
+		from = 0
+	}
+	for from <= target {
+		to := from + options.BatchSize - 1
+		if to > target {
+			to = target
+		}
+		if err := i.Scan(ctx, from, new(big.Int).SetUint64(to)); err != nil {
+			return err
+		}
+		block, err := i.client.BlockByNumber(ctx, new(big.Int).SetUint64(to))
+		if err != nil {
+			return err
+		}
+		if err := i.store.MarkIndexerSuccess(
+			i.chain.ChainID,
+			"default",
+			to,
+			block.Hash().Hex(),
+			latest,
+			options.Confirmations,
+		); err != nil {
+			return err
+		}
+		from = to + 1
+	}
 	return nil
 }
 
@@ -131,8 +244,12 @@ func (i *Indexer) handleLog(ctx context.Context, log types.Log) error {
 		return i.handleStationRegistered(ctx, contractABI, log)
 	case i.abis["RevenueVault"].Events["RevenueDeposited"].ID:
 		return i.handleRevenueDeposited(i.abis["RevenueVault"], log)
+	case i.abis["RevenueVault"].Events["RevenueClaimed"].ID:
+		return i.handleRevenueClaimed(i.abis["RevenueVault"], log)
 	case i.abis["CarbonCreditToken"].Events["CarbonCreditsMinted"].ID:
 		return i.handleCarbonCreditsMinted(i.abis["CarbonCreditToken"], log)
+	case i.abis["CarbonCreditToken"].Events["Transfer"].ID:
+		return i.handleCarbonTransfer(i.abis["CarbonCreditToken"], log)
 	case i.abis["GreenCertificate"].Events["CertificateIssued"].ID:
 		return i.handleCertificateIssued(i.abis["GreenCertificate"], log)
 	default:
@@ -207,6 +324,25 @@ func (i *Indexer) handleRevenueDeposited(contractABI abi.ABI, log types.Log) err
 	return i.store.CreateRevenueDeposit(deposit)
 }
 
+func (i *Indexer) handleRevenueClaimed(contractABI abi.ABI, log types.Log) error {
+	values := map[string]any{}
+	if err := contractABI.UnpackIntoMap(values, "RevenueClaimed", log.Data); err != nil {
+		return err
+	}
+	claim := repository.RevenueClaim{
+		ChainID:     i.chain.ChainID,
+		Account:     topicAddress(log.Topics[1]).Hex(),
+		AmountWei:   values["amount"].(*big.Int).String(),
+		TxHash:      log.TxHash.Hex(),
+		LogIndex:    uint(log.Index),
+		BlockNumber: log.BlockNumber,
+	}
+	if err := i.store.UpsertChainEvent(i.chainEvent(log, "RevenueVault", "RevenueClaimed", mustJSON(claim))); err != nil {
+		return err
+	}
+	return i.store.CreateRevenueClaim(claim)
+}
+
 func (i *Indexer) handleCarbonCreditsMinted(contractABI abi.ABI, log types.Log) error {
 	values := map[string]any{}
 	if err := contractABI.UnpackIntoMap(values, "CarbonCreditsMinted", log.Data); err != nil {
@@ -226,6 +362,30 @@ func (i *Indexer) handleCarbonCreditsMinted(contractABI abi.ABI, log types.Log) 
 		return err
 	}
 	return i.store.CreateCarbonCreditIssuance(issuance)
+}
+
+func (i *Indexer) handleCarbonTransfer(contractABI abi.ABI, log types.Log) error {
+	to := topicAddress(log.Topics[2])
+	if to != (common.Address{}) {
+		return nil
+	}
+	values := map[string]any{}
+	if err := contractABI.UnpackIntoMap(values, "Transfer", log.Data); err != nil {
+		return err
+	}
+	retirement := repository.CarbonCreditRetirement{
+		ChainID:     i.chain.ChainID,
+		Account:     topicAddress(log.Topics[1]).Hex(),
+		Amount:      values["value"].(*big.Int).String(),
+		Reason:      "burn",
+		TxHash:      log.TxHash.Hex(),
+		LogIndex:    uint(log.Index),
+		BlockNumber: log.BlockNumber,
+	}
+	if err := i.store.UpsertChainEvent(i.chainEvent(log, "CarbonCreditToken", "CarbonCreditRetired", mustJSON(retirement))); err != nil {
+		return err
+	}
+	return i.store.CreateCarbonCreditRetirement(retirement)
 }
 
 func (i *Indexer) handleCertificateIssued(contractABI abi.ABI, log types.Log) error {

@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"log"
-	"math/big"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
+	"time"
 
 	"sunways-asset/backend/internal/blockchain"
 	"sunways-asset/backend/internal/config"
@@ -16,7 +18,8 @@ import (
 )
 
 func main() {
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	cfg := config.Load()
 
 	chain, err := blockchain.LoadConfig(cfg.ChainConfig)
@@ -42,18 +45,25 @@ func main() {
 		log.Fatalf("create indexer: %v", err)
 	}
 
-	fromBlock := uint64Env("INDEXER_FROM_BLOCK", 0)
-	latest, err := client.BlockNumber(ctx)
-	if err != nil {
-		log.Fatalf("get latest block: %v", err)
+	options := indexer.RunOptions{
+		PollInterval:  cfg.Indexer.PollInterval,
+		Confirmations: cfg.Indexer.Confirmations,
+		BatchSize:     cfg.Indexer.BatchSize,
+		RetryDelay:    durationEnv("INDEXER_RETRY_DELAY", 2*time.Second),
+		Once:          boolEnv("INDEXER_ONCE", false),
 	}
-	toBlock := new(big.Int).SetUint64(latest)
-
-	log.Printf("indexing chain=%d from=%d to=%d", chain.ChainID, fromBlock, latest)
-	if err := idx.Scan(ctx, fromBlock, toBlock); err != nil {
-		log.Fatalf("scan logs: %v", err)
+	log.Printf(
+		"indexer running chain=%d poll=%s confirmations=%d batch=%d once=%v",
+		chain.ChainID,
+		options.PollInterval,
+		options.Confirmations,
+		options.BatchSize,
+		options.Once,
+	)
+	if err := idx.Run(ctx, options); err != nil && err != context.Canceled {
+		log.Fatalf("run indexer: %v", err)
 	}
-	log.Print("indexing complete")
+	log.Print("indexer stopped")
 }
 
 func uint64Env(key string, fallback uint64) uint64 {
@@ -62,6 +72,30 @@ func uint64Env(key string, fallback uint64) uint64 {
 		return fallback
 	}
 	parsed, err := strconv.ParseUint(value, 10, 64)
+	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
+func boolEnv(key string, fallback bool) bool {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
+func durationEnv(key string, fallback time.Duration) time.Duration {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := time.ParseDuration(value)
 	if err != nil {
 		return fallback
 	}

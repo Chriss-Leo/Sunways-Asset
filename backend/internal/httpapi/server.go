@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"sunways-asset/backend/internal/admin"
 	"sunways-asset/backend/internal/auth"
 	"sunways-asset/backend/internal/repository"
 	"sunways-asset/backend/internal/wallet"
@@ -17,7 +18,9 @@ import (
 
 // Server wires Gin routes to wallet nonce, auth-session, and repository services.
 type Server struct {
+	admin          *admin.Service
 	auth           *auth.Service
+	chainID        int64
 	frontendOrigin string
 	store          *repository.Store
 	wallet         *wallet.Service
@@ -28,10 +31,14 @@ func NewServer(
 	walletSvc *wallet.Service,
 	authSvc *auth.Service,
 	store *repository.Store,
+	adminSvc *admin.Service,
+	chainID int64,
 	frontendOrigin string,
 ) *Server {
 	return &Server{
+		admin:          adminSvc,
 		auth:           authSvc,
+		chainID:        chainID,
 		frontendOrigin: frontendOrigin,
 		store:          store,
 		wallet:         walletSvc,
@@ -50,8 +57,22 @@ func (s *Server) Router() *gin.Engine {
 	router.GET("/auth/me", s.me)
 	router.POST("/auth/logout", s.logout)
 	router.GET("/stations", s.listStations)
+	router.GET("/stations/operation-statuses", s.listStationOperationStatuses)
 	router.GET("/stations/:id", s.getStation)
+	router.GET("/revenue/deposits", s.listRevenueDeposits)
+	router.GET("/revenue/claims", s.listRevenueClaims)
+	router.GET("/carbon/issuances", s.listCarbonIssuances)
+	router.GET("/carbon/retirements", s.listCarbonRetirements)
+	router.GET("/certificates/issuances", s.listCertificateIssuances)
+	router.GET("/accounts/summaries", s.listAccountSummaries)
+	router.GET("/indexer/status", s.indexerStatus)
 	router.GET("/dashboard/summary", s.dashboardSummary)
+	router.POST("/admin/stations", s.adminRegisterStation)
+	router.POST("/admin/revenue-deposits", s.adminDepositRevenue)
+	router.POST("/admin/carbon-credits", s.adminMintCarbon)
+	router.POST("/admin/green-certificates", s.adminIssueCertificate)
+	router.PATCH("/admin/stations/:id/review", s.adminReviewStation)
+	router.PATCH("/admin/stations/:id/operation-status", s.adminUpdateStationOperationStatus)
 
 	return router
 }
@@ -176,6 +197,197 @@ func (s *Server) dashboardSummary(c *gin.Context) {
 	c.JSON(http.StatusOK, summary)
 }
 
+func (s *Server) listRevenueDeposits(c *gin.Context) {
+	items, err := s.store.ListRevenueDeposits(limitFromQuery(c, 100))
+	writeList(c, items, err, "failed to list revenue deposits")
+}
+
+func (s *Server) listStationOperationStatuses(c *gin.Context) {
+	items, err := s.store.ListStationOperationStatuses(limitFromQuery(c, 100))
+	writeList(c, items, err, "failed to list station operation statuses")
+}
+
+func (s *Server) listRevenueClaims(c *gin.Context) {
+	items, err := s.store.ListRevenueClaims(limitFromQuery(c, 100))
+	writeList(c, items, err, "failed to list revenue claims")
+}
+
+func (s *Server) listCarbonIssuances(c *gin.Context) {
+	items, err := s.store.ListCarbonCreditIssuances(limitFromQuery(c, 100))
+	writeList(c, items, err, "failed to list carbon issuances")
+}
+
+func (s *Server) listCarbonRetirements(c *gin.Context) {
+	items, err := s.store.ListCarbonCreditRetirements(limitFromQuery(c, 100))
+	writeList(c, items, err, "failed to list carbon retirements")
+}
+
+func (s *Server) listCertificateIssuances(c *gin.Context) {
+	items, err := s.store.ListGreenCertificateIssuances(limitFromQuery(c, 100))
+	writeList(c, items, err, "failed to list certificate issuances")
+}
+
+func (s *Server) listAccountSummaries(c *gin.Context) {
+	items, err := s.store.ListUserAssetSummaries(limitFromQuery(c, 100))
+	writeList(c, items, err, "failed to list account summaries")
+}
+
+func (s *Server) indexerStatus(c *gin.Context) {
+	state, err := s.store.GetIndexerState(s.chainID, "default")
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusOK, gin.H{
+				"chainId":          s.chainID,
+				"name":             "default",
+				"lastIndexedBlock": 0,
+				"latestKnownBlock": 0,
+				"lagBlocks":        0,
+				"failureCount":     0,
+			})
+			return
+		}
+		writeError(c, http.StatusInternalServerError, "failed to load indexer status")
+		return
+	}
+
+	lag := uint64(0)
+	if state.LatestKnownBlock > state.LastIndexedBlock {
+		lag = state.LatestKnownBlock - state.LastIndexedBlock
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"chainId":          state.ChainID,
+		"name":             state.Name,
+		"lastIndexedBlock": state.LastIndexedBlock,
+		"lastIndexedHash":  state.LastIndexedHash,
+		"latestKnownBlock": state.LatestKnownBlock,
+		"lagBlocks":        lag,
+		"confirmations":    state.Confirmations,
+		"failureCount":     state.FailureCount,
+		"lastError":        state.LastError,
+		"lastStartedAt":    state.LastStartedAt,
+		"lastIndexedAt":    state.LastIndexedAt,
+		"updatedAt":        state.UpdatedAt,
+	})
+}
+
+func (s *Server) adminRegisterStation(c *gin.Context) {
+	var req admin.RegisterStationRequest
+	if !s.bindAdmin(c, &req) {
+		return
+	}
+	hash, err := s.admin.RegisterStation(c.Request.Context(), req)
+	s.writeTx(c, hash, err)
+}
+
+func (s *Server) adminDepositRevenue(c *gin.Context) {
+	var req admin.DepositRevenueRequest
+	if !s.bindAdmin(c, &req) {
+		return
+	}
+	hash, err := s.admin.DepositRevenue(c.Request.Context(), req)
+	s.writeTx(c, hash, err)
+}
+
+func (s *Server) adminMintCarbon(c *gin.Context) {
+	var req admin.MintCarbonRequest
+	if !s.bindAdmin(c, &req) {
+		return
+	}
+	hash, err := s.admin.MintCarbon(c.Request.Context(), req)
+	s.writeTx(c, hash, err)
+}
+
+func (s *Server) adminIssueCertificate(c *gin.Context) {
+	var req admin.IssueCertificateRequest
+	if !s.bindAdmin(c, &req) {
+		return
+	}
+	hash, err := s.admin.IssueCertificate(c.Request.Context(), req)
+	s.writeTx(c, hash, err)
+}
+
+func (s *Server) adminReviewStation(c *gin.Context) {
+	stationID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		writeError(c, http.StatusBadRequest, "invalid station id")
+		return
+	}
+	var req struct {
+		Status string `json:"status"`
+		Note   string `json:"note"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeError(c, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.Status == "" {
+		req.Status = "pending"
+	}
+	if err := s.store.UpdateStationReview(stationID, req.Status, req.Note); err != nil {
+		writeError(c, http.StatusInternalServerError, "failed to update station review")
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+func (s *Server) adminUpdateStationOperationStatus(c *gin.Context) {
+	stationID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		writeError(c, http.StatusBadRequest, "invalid station id")
+		return
+	}
+	var req struct {
+		Status      string `json:"status"`
+		Utilization string `json:"utilization"`
+		Note        string `json:"note"`
+		UpdatedBy   string `json:"updatedBy"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeError(c, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.Status == "" {
+		req.Status = "normal"
+	}
+	if err := s.store.UpsertStationOperationStatus(repository.StationOperationStatus{
+		ChainID:     s.chainID,
+		StationID:   stationID,
+		Status:      req.Status,
+		Utilization: req.Utilization,
+		Note:        req.Note,
+		UpdatedBy:   req.UpdatedBy,
+		UpdatedAt:   time.Now(),
+	}); err != nil {
+		writeError(c, http.StatusInternalServerError, "failed to update operation status")
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+func (s *Server) bindAdmin(c *gin.Context, req any) bool {
+	if s.admin == nil || !s.admin.Enabled() {
+		writeError(c, http.StatusServiceUnavailable, "admin transaction service is not configured")
+		return false
+	}
+	if err := c.ShouldBindJSON(req); err != nil {
+		writeError(c, http.StatusBadRequest, "invalid request body")
+		return false
+	}
+	return true
+}
+
+func (s *Server) writeTx(c *gin.Context, hash interface{ Hex() string }, err error) {
+	if err != nil {
+		if errors.Is(err, admin.ErrDisabled) {
+			writeError(c, http.StatusServiceUnavailable, err.Error())
+			return
+		}
+		writeError(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"txHash": hash.Hex()})
+}
+
 func (s *Server) sessionFromRequest(c *gin.Context) (auth.Session, bool) {
 	token, ok := bearerToken(c)
 	if !ok {
@@ -204,7 +416,7 @@ func (s *Server) cors() gin.HandlerFunc {
 		if origin == s.frontendOrigin {
 			c.Header("Access-Control-Allow-Origin", origin)
 			c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type")
-			c.Header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			c.Header("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS")
 		}
 		if c.Request.Method == http.MethodOptions {
 			c.AbortWithStatus(http.StatusNoContent)
@@ -212,6 +424,26 @@ func (s *Server) cors() gin.HandlerFunc {
 		}
 		c.Next()
 	}
+}
+
+func limitFromQuery(c *gin.Context, fallback int) int {
+	raw := c.Query("limit")
+	if raw == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(raw)
+	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
+func writeList(c *gin.Context, items any, err error, message string) {
+	if err != nil {
+		writeError(c, http.StatusInternalServerError, message)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"items": items})
 }
 
 func statusForError(err error) int {

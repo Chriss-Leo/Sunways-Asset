@@ -28,7 +28,19 @@ type App struct {
 	NonceTTL       time.Duration
 	SessionTTL     time.Duration
 	ChainConfig    string
+	Indexer        Indexer
+	Admin          Admin
 	Postgres       Postgres
+}
+
+type Indexer struct {
+	PollInterval  time.Duration
+	Confirmations uint64
+	BatchSize     uint64
+}
+
+type Admin struct {
+	PrivateKey string
 }
 
 func Load() App {
@@ -41,6 +53,14 @@ func Load() App {
 		NonceTTL:       durationEnv("WALLET_NONCE_TTL", 5*time.Minute),
 		SessionTTL:     durationEnv("AUTH_SESSION_TTL", 24*time.Hour),
 		ChainConfig:    env("CHAIN_CONFIG_PATH", "../config/chains.local.json"),
+		Indexer: Indexer{
+			PollInterval:  durationEnv("INDEXER_POLL_INTERVAL", 3*time.Second),
+			Confirmations: uint64Env("INDEXER_CONFIRMATIONS", 0),
+			BatchSize:     uint64Env("INDEXER_BATCH_SIZE", 500),
+		},
+		Admin: Admin{
+			PrivateKey: env("ADMIN_PRIVATE_KEY", ""),
+		},
 		Postgres: Postgres{
 			Host:         env("POSTGRES_HOST", "127.0.0.1"),
 			Port:         intEnv("POSTGRES_PORT", 5432),
@@ -84,6 +104,18 @@ func intEnv(key string, fallback int) int {
 		return fallback
 	}
 	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
+func uint64Env(key string, fallback uint64) uint64 {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseUint(value, 10, 64)
 	if err != nil {
 		return fallback
 	}

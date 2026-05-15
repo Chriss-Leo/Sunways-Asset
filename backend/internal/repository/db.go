@@ -49,10 +49,15 @@ func Open(pg config.Postgres) (*gorm.DB, error) {
 func AutoMigrate(db *gorm.DB) error {
 	return db.AutoMigrate(
 		&IndexedBlock{},
+		&IndexerState{},
 		&ChainEvent{},
 		&Station{},
+		&StationOperationStatus{},
 		&RevenueDeposit{},
+		&RevenueClaim{},
 		&CarbonCreditIssuance{},
+		&CarbonCreditRetirement{},
 		&GreenCertificateIssuance{},
+		&UserAssetSummary{},
 	)
 }

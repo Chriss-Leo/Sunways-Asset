@@ -7,8 +7,8 @@ import {
   getCarbonRetirements,
   getCertificateIssuances,
   getIndexerStatus,
-  getRevenueDeposits,
   getRevenueClaims,
+  getRevenueDeposits,
   getStationOperationStatuses,
   getStations,
   type CarbonCreditIssuance,
@@ -18,6 +18,7 @@ import {
   type RevenueDeposit,
   type Station,
   type StationOperationStatus,
+  type UserAssetSummary,
 } from "@/services/dashboard";
 
 function shortAddress(address: string | undefined) {
@@ -52,39 +53,92 @@ function formatToken(value: string | undefined, suffix: string) {
   })} ${suffix}`;
 }
 
-function EmptyRow({ colSpan }: { colSpan: number }) {
-  return (
-    <tr>
-      <td className="px-5 py-8 text-center text-sm text-zinc-500" colSpan={colSpan}>
-        Waiting for indexed chain data
-      </td>
-    </tr>
-  );
-}
-
-function TableShell({
-  title,
-  subtitle,
+function SectionShell({
+  action,
   children,
+  eyebrow,
+  title,
 }: {
-  title: string;
-  subtitle: string;
+  action?: ReactNode;
   children: ReactNode;
+  eyebrow: string;
+  title: string;
 }) {
   return (
-    <section className="rounded-lg border border-zinc-200 bg-white shadow-sm">
-      <div className="border-b border-zinc-200 px-5 py-4">
-        <p className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-          {subtitle}
-        </p>
-        <h2 className="mt-1 text-xl font-semibold text-zinc-950">{title}</h2>
+    <section className="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+      <div className="flex flex-col gap-3 border-b border-zinc-200 bg-zinc-50/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            {eyebrow}
+          </p>
+          <h2 className="mt-1 text-xl font-semibold text-zinc-950">{title}</h2>
+        </div>
+        {action}
       </div>
-      <div className="overflow-x-auto">{children}</div>
+      {children}
     </section>
   );
 }
 
-function StationTable({
+function StatusPill({
+  children,
+  tone = "zinc",
+}: {
+  children: ReactNode;
+  tone?: "emerald" | "amber" | "red" | "sky" | "zinc";
+}) {
+  const tones = {
+    amber: "border-amber-200 bg-amber-50 text-amber-800",
+    emerald: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    red: "border-red-200 bg-red-50 text-red-700",
+    sky: "border-sky-200 bg-sky-50 text-sky-700",
+    zinc: "border-zinc-200 bg-zinc-50 text-zinc-700",
+  };
+
+  return (
+    <span
+      className={`inline-flex min-h-7 items-center rounded-full border px-2.5 text-xs font-semibold ${tones[tone]}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+function EmptyState({ label }: { label: string }) {
+  return (
+    <div className="rounded-md border border-dashed border-zinc-300 bg-zinc-50 px-4 py-6 text-center text-sm text-zinc-500">
+      {label}
+    </div>
+  );
+}
+
+function IndexerCard({
+  label,
+  tone,
+  value,
+}: {
+  label: string;
+  tone: "emerald" | "amber" | "red" | "sky";
+  value: string | number;
+}) {
+  const accents = {
+    amber: "border-l-amber-400",
+    emerald: "border-l-emerald-500",
+    red: "border-l-red-500",
+    sky: "border-l-sky-500",
+  };
+
+  return (
+    <article
+      className={`rounded-lg border border-zinc-200 border-l-4 bg-white p-5 shadow-sm ${accents[tone]}`}
+    >
+      <p className="text-sm font-medium text-zinc-500">{label}</p>
+      <p className="mt-2 text-2xl font-semibold text-zinc-950">{value}</p>
+    </article>
+  );
+}
+
+function StationBoard({
   operations,
   stations,
 }: {
@@ -94,225 +148,167 @@ function StationTable({
   const operationMap = new Map(
     operations.map((operation) => [operation.stationId, operation]),
   );
+
   return (
-    <TableShell title="Power Station List" subtitle="Assets">
-      <table className="min-w-full divide-y divide-zinc-200 text-left text-sm">
-        <thead className="bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500">
-          <tr>
-            <th className="px-5 py-3 font-semibold">ID</th>
-            <th className="px-5 py-3 font-semibold">Name</th>
-            <th className="px-5 py-3 font-semibold">Region</th>
-            <th className="px-5 py-3 font-semibold">Capacity</th>
-            <th className="px-5 py-3 font-semibold">Status</th>
-            <th className="px-5 py-3 font-semibold">Utilization</th>
-            <th className="px-5 py-3 font-semibold">Review</th>
-            <th className="px-5 py-3 font-semibold">Owner</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-zinc-100">
-          {stations.length === 0 ? <EmptyRow colSpan={8} /> : null}
-          {stations.map((station) => {
-            const operation = operationMap.get(station.stationId);
-            return (
-              <tr className="text-zinc-700" key={station.stationId}>
-                <td className="px-5 py-4 font-mono font-semibold text-zinc-950">
-                  #{station.stationId}
-                </td>
-                <td className="px-5 py-4 font-semibold text-zinc-950">
-                  {station.name}
-                </td>
-                <td className="px-5 py-4">{station.region}</td>
-                <td className="px-5 py-4">
-                  {Number(station.capacityKw).toLocaleString()} kW
-                </td>
-                <td className="px-5 py-4">
+    <SectionShell
+      action={<StatusPill tone="emerald">{stations.length} indexed</StatusPill>}
+      eyebrow="Assets"
+      title="Power Station Portfolio"
+    >
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,28rem),1fr))] gap-4 p-5">
+        {stations.length === 0 ? (
+          <div className="lg:col-span-2">
+            <EmptyState label="Waiting for indexed station assets" />
+          </div>
+        ) : null}
+        {stations.map((station) => {
+          const operation = operationMap.get(station.stationId);
+          return (
+            <article
+              className="rounded-lg border border-zinc-200 bg-white p-5 transition hover:border-zinc-300 hover:shadow-md"
+              key={station.stationId}
+            >
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="font-mono text-xs font-semibold text-zinc-500">
+                    Station #{station.stationId}
+                  </p>
+                  <h3 className="mt-1 text-lg font-semibold text-zinc-950">
+                    {station.name}
+                  </h3>
+                  <p className="mt-1 text-sm text-zinc-600">{station.region}</p>
+                </div>
+                <StatusPill
+                  tone={operation?.status === "normal" ? "emerald" : "sky"}
+                >
                   {operation?.status ?? station.status}
-                </td>
-                <td className="px-5 py-4">{operation?.utilization || "N/A"}</td>
-                <td className="px-5 py-4">
-                  {station.reviewStatus ?? "approved"}
-                </td>
-                <td className="px-5 py-4 font-mono">
-                  {shortAddress(station.owner)}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </TableShell>
+                </StatusPill>
+              </div>
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-md bg-zinc-50 p-3">
+                  <p className="text-xs font-medium text-zinc-500">Capacity</p>
+                  <p className="mt-1 text-sm font-semibold text-zinc-950">
+                    {Number(station.capacityKw).toLocaleString()} kW
+                  </p>
+                </div>
+                <div className="rounded-md bg-zinc-50 p-3">
+                  <p className="text-xs font-medium text-zinc-500">
+                    Utilization
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-zinc-950">
+                    {operation?.utilization || "N/A"}
+                  </p>
+                </div>
+                <div className="rounded-md bg-zinc-50 p-3">
+                  <p className="text-xs font-medium text-zinc-500">Review</p>
+                  <p className="mt-1 text-sm font-semibold text-zinc-950">
+                    {station.reviewStatus ?? "approved"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 flex flex-col gap-2 border-t border-zinc-100 pt-4 text-sm text-zinc-600 sm:flex-row sm:items-center sm:justify-between">
+                <span className="font-mono">{shortAddress(station.owner)}</span>
+                <span className="font-mono">{shortHash(station.txHash)}</span>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </SectionShell>
   );
 }
 
-function RevenueTable({ deposits }: { deposits: RevenueDeposit[] }) {
-  return (
-    <TableShell title="Revenue Deposits" subtitle="Revenue">
-      <table className="min-w-full divide-y divide-zinc-200 text-left text-sm">
-        <thead className="bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500">
-          <tr>
-            <th className="px-5 py-3 font-semibold">Station</th>
-            <th className="px-5 py-3 font-semibold">Amount</th>
-            <th className="px-5 py-3 font-semibold">Beneficiary</th>
-            <th className="px-5 py-3 font-semibold">Block</th>
-            <th className="px-5 py-3 font-semibold">Tx</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-zinc-100">
-          {deposits.length === 0 ? <EmptyRow colSpan={5} /> : null}
-          {deposits.map((deposit) => (
-            <tr className="text-zinc-700" key={`${deposit.txHash}-${deposit.blockNumber}`}>
-              <td className="px-5 py-4 font-mono font-semibold text-zinc-950">
-                #{deposit.stationId}
-              </td>
-              <td className="px-5 py-4 font-semibold text-zinc-950">
-                {formatWei(deposit.amountWei)}
-              </td>
-              <td className="px-5 py-4 font-mono">
-                {shortAddress(deposit.beneficiary)}
-              </td>
-              <td className="px-5 py-4">{deposit.blockNumber}</td>
-              <td className="px-5 py-4 font-mono">{shortHash(deposit.txHash)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </TableShell>
-  );
-}
-
-function RevenueClaimTable({ claims }: { claims: RevenueClaim[] }) {
-  return (
-    <TableShell title="Revenue Claims" subtitle="Claims">
-      <table className="min-w-full divide-y divide-zinc-200 text-left text-sm">
-        <thead className="bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500">
-          <tr>
-            <th className="px-5 py-3 font-semibold">Account</th>
-            <th className="px-5 py-3 font-semibold">Amount</th>
-            <th className="px-5 py-3 font-semibold">Block</th>
-            <th className="px-5 py-3 font-semibold">Tx</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-zinc-100">
-          {claims.length === 0 ? <EmptyRow colSpan={4} /> : null}
-          {claims.map((claim) => (
-            <tr className="text-zinc-700" key={`${claim.txHash}-${claim.blockNumber}`}>
-              <td className="px-5 py-4 font-mono">{shortAddress(claim.account)}</td>
-              <td className="px-5 py-4 font-semibold text-zinc-950">
-                {formatWei(claim.amountWei)}
-              </td>
-              <td className="px-5 py-4">{claim.blockNumber}</td>
-              <td className="px-5 py-4 font-mono">{shortHash(claim.txHash)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </TableShell>
-  );
-}
-
-function CarbonTable({ issuances }: { issuances: CarbonCreditIssuance[] }) {
-  return (
-    <TableShell title="Carbon Credit Records" subtitle="Carbon">
-      <table className="min-w-full divide-y divide-zinc-200 text-left text-sm">
-        <thead className="bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500">
-          <tr>
-            <th className="px-5 py-3 font-semibold">Station</th>
-            <th className="px-5 py-3 font-semibold">Amount</th>
-            <th className="px-5 py-3 font-semibold">Account</th>
-            <th className="px-5 py-3 font-semibold">Evidence</th>
-            <th className="px-5 py-3 font-semibold">Tx</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-zinc-100">
-          {issuances.length === 0 ? <EmptyRow colSpan={5} /> : null}
-          {issuances.map((item) => (
-            <tr className="text-zinc-700" key={`${item.txHash}-${item.blockNumber}`}>
-              <td className="px-5 py-4 font-mono font-semibold text-zinc-950">
-                #{item.stationId}
-              </td>
-              <td className="px-5 py-4 font-semibold text-zinc-950">
-                {formatToken(item.amount, "SWC")}
-              </td>
-              <td className="px-5 py-4 font-mono">{shortAddress(item.account)}</td>
-              <td className="max-w-52 truncate px-5 py-4">{item.evidenceUri}</td>
-              <td className="px-5 py-4 font-mono">{shortHash(item.txHash)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </TableShell>
-  );
-}
-
-function CarbonRetirementTable({
-  retirements,
+function RecordItem({
+  meta,
+  title,
+  txHash,
+  value,
 }: {
-  retirements: CarbonCreditRetirement[];
+  meta: string;
+  title: string;
+  txHash: string;
+  value: string;
 }) {
   return (
-    <TableShell title="Carbon Retirement Records" subtitle="Retirement">
-      <table className="min-w-full divide-y divide-zinc-200 text-left text-sm">
-        <thead className="bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500">
-          <tr>
-            <th className="px-5 py-3 font-semibold">Account</th>
-            <th className="px-5 py-3 font-semibold">Amount</th>
-            <th className="px-5 py-3 font-semibold">Reason</th>
-            <th className="px-5 py-3 font-semibold">Tx</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-zinc-100">
-          {retirements.length === 0 ? <EmptyRow colSpan={4} /> : null}
-          {retirements.map((item) => (
-            <tr className="text-zinc-700" key={`${item.txHash}-${item.blockNumber}`}>
-              <td className="px-5 py-4 font-mono">{shortAddress(item.account)}</td>
-              <td className="px-5 py-4 font-semibold text-zinc-950">
-                {formatToken(item.amount, "SWC")}
-              </td>
-              <td className="px-5 py-4">{item.reason}</td>
-              <td className="px-5 py-4 font-mono">{shortHash(item.txHash)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </TableShell>
+    <article className="flex flex-col gap-3 rounded-lg border border-zinc-200 bg-white p-4 transition hover:border-zinc-300 hover:shadow-sm sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <p className="text-sm font-semibold text-zinc-950">{title}</p>
+        <p className="mt-1 text-xs text-zinc-500">{meta}</p>
+      </div>
+      <div className="flex flex-col gap-1 sm:items-end">
+        <p className="text-sm font-semibold text-zinc-950">{value}</p>
+        <p className="font-mono text-xs text-zinc-500">{shortHash(txHash)}</p>
+      </div>
+    </article>
   );
 }
 
-function CertificateTable({
-  issuances,
+function RecordPanel({
+  children,
+  emptyLabel,
+  eyebrow,
+  title,
 }: {
-  issuances: GreenCertificateIssuance[];
+  children: ReactNode;
+  emptyLabel: string;
+  eyebrow: string;
+  title: string;
 }) {
+  const isEmpty = Array.isArray(children) && children.length === 0;
+
   return (
-    <TableShell title="Green Certificate Batches" subtitle="Certificates">
-      <table className="min-w-full divide-y divide-zinc-200 text-left text-sm">
-        <thead className="bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500">
-          <tr>
-            <th className="px-5 py-3 font-semibold">Certificate</th>
-            <th className="px-5 py-3 font-semibold">Station</th>
-            <th className="px-5 py-3 font-semibold">Amount</th>
-            <th className="px-5 py-3 font-semibold">Period</th>
-            <th className="px-5 py-3 font-semibold">Tx</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-zinc-100">
-          {issuances.length === 0 ? <EmptyRow colSpan={5} /> : null}
-          {issuances.map((item) => (
-            <tr className="text-zinc-700" key={`${item.txHash}-${item.certificateId}`}>
-              <td className="px-5 py-4 font-mono font-semibold text-zinc-950">
-                #{item.certificateId}
-              </td>
-              <td className="px-5 py-4 font-mono">#{item.stationId}</td>
-              <td className="px-5 py-4 font-semibold text-zinc-950">
-                {Number(item.amount).toLocaleString()}
-              </td>
-              <td className="px-5 py-4">{item.period}</td>
-              <td className="px-5 py-4 font-mono">{shortHash(item.txHash)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </TableShell>
+    <SectionShell eyebrow={eyebrow} title={title}>
+      <div className="space-y-3 p-5">
+        {isEmpty ? <EmptyState label={emptyLabel} /> : children}
+      </div>
+    </SectionShell>
+  );
+}
+
+function AccountSummaryPanel({ items }: { items: UserAssetSummary[] }) {
+  return (
+    <SectionShell eyebrow="Accounts" title="User Asset Summary">
+      <div className="grid gap-4 p-5">
+        {items.length === 0 ? (
+          <EmptyState label="Waiting for indexed account balances" />
+        ) : null}
+        {items.map((item) => (
+          <article
+            className="rounded-lg border border-zinc-200 bg-white p-5"
+            key={item.account}
+          >
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="font-mono text-sm font-semibold text-zinc-950">
+                {shortAddress(item.account)}
+              </p>
+              <StatusPill tone="sky">{item.stationCount} stations</StatusPill>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-md bg-zinc-50 p-3">
+                <p className="text-xs text-zinc-500">Revenue</p>
+                <p className="mt-1 text-sm font-semibold text-zinc-950">
+                  {formatWei(item.totalRevenueWei)}
+                </p>
+              </div>
+              <div className="rounded-md bg-zinc-50 p-3">
+                <p className="text-xs text-zinc-500">Carbon</p>
+                <p className="mt-1 text-sm font-semibold text-zinc-950">
+                  {formatToken(item.carbonCreditBalance, "SWC")}
+                </p>
+              </div>
+              <div className="rounded-md bg-zinc-50 p-3">
+                <p className="text-xs text-zinc-500">Certificates</p>
+                <p className="mt-1 text-sm font-semibold text-zinc-950">
+                  {Number(item.greenCertificateCount).toLocaleString()}
+                </p>
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
+    </SectionShell>
   );
 }
 
@@ -372,83 +368,111 @@ export function OperationsTables() {
     refetchInterval: 10_000,
   });
 
+  const revenueRecords = [
+    ...(deposits.data?.items ?? []).map((item: RevenueDeposit) => (
+      <RecordItem
+        key={`deposit-${item.txHash}-${item.blockNumber}`}
+        meta={`Station #${item.stationId} · ${shortAddress(item.beneficiary)}`}
+        title="Revenue deposited"
+        txHash={item.txHash}
+        value={formatWei(item.amountWei)}
+      />
+    )),
+    ...(claims.data?.items ?? []).map((item: RevenueClaim) => (
+      <RecordItem
+        key={`claim-${item.txHash}-${item.blockNumber}`}
+        meta={shortAddress(item.account)}
+        title="Revenue claimed"
+        txHash={item.txHash}
+        value={formatWei(item.amountWei)}
+      />
+    )),
+  ];
+
+  const carbonRecords = [
+    ...(carbon.data?.items ?? []).map((item: CarbonCreditIssuance) => (
+      <RecordItem
+        key={`carbon-${item.txHash}-${item.blockNumber}`}
+        meta={`Station #${item.stationId} · ${shortAddress(item.account)}`}
+        title="Carbon credits minted"
+        txHash={item.txHash}
+        value={formatToken(item.amount, "SWC")}
+      />
+    )),
+    ...(retirements.data?.items ?? []).map((item: CarbonCreditRetirement) => (
+      <RecordItem
+        key={`retire-${item.txHash}-${item.blockNumber}`}
+        meta={`${item.reason} · ${shortAddress(item.account)}`}
+        title="Carbon credits retired"
+        txHash={item.txHash}
+        value={formatToken(item.amount, "SWC")}
+      />
+    )),
+  ];
+
+  const certificateRecords = (certificates.data?.items ?? []).map(
+    (item: GreenCertificateIssuance) => (
+      <RecordItem
+        key={`certificate-${item.txHash}-${item.certificateId}`}
+        meta={`${item.certificateType} · ${item.period}`}
+        title={`Certificate #${item.certificateId}`}
+        txHash={item.txHash}
+        value={`${Number(item.amount).toLocaleString()} issued`}
+      />
+    ),
+  );
+
+  const lag = status.data?.lagBlocks ?? 0;
+
   return (
     <section className="space-y-6">
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <article className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-          <p className="text-sm font-medium text-zinc-500">Latest Block</p>
-          <p className="mt-2 text-2xl font-semibold text-zinc-950">
-            {status.data?.latestKnownBlock ?? 0}
-          </p>
-        </article>
-        <article className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-          <p className="text-sm font-medium text-zinc-500">Indexed Block</p>
-          <p className="mt-2 text-2xl font-semibold text-zinc-950">
-            {status.data?.lastIndexedBlock ?? 0}
-          </p>
-        </article>
-        <article className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-          <p className="text-sm font-medium text-zinc-500">Lag</p>
-          <p className="mt-2 text-2xl font-semibold text-zinc-950">
-            {status.data?.lagBlocks ?? 0} blocks
-          </p>
-        </article>
-        <article className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-          <p className="text-sm font-medium text-zinc-500">Failures</p>
-          <p className="mt-2 text-2xl font-semibold text-zinc-950">
-            {status.data?.failureCount ?? 0}
-          </p>
-          {status.data?.lastError ? (
-            <p className="mt-2 truncate text-sm text-red-600">
-              {status.data.lastError}
-            </p>
-          ) : null}
-        </article>
+        <IndexerCard
+          label="Latest Block"
+          tone="sky"
+          value={status.data?.latestKnownBlock ?? 0}
+        />
+        <IndexerCard
+          label="Indexed Block"
+          tone="emerald"
+          value={status.data?.lastIndexedBlock ?? 0}
+        />
+        <IndexerCard label="Lag" tone={lag > 0 ? "amber" : "emerald"} value={`${lag} blocks`} />
+        <IndexerCard
+          label="Failures"
+          tone={(status.data?.failureCount ?? 0) > 0 ? "red" : "emerald"}
+          value={status.data?.failureCount ?? 0}
+        />
       </section>
 
-      <StationTable
+      <StationBoard
         operations={operations.data?.items ?? []}
         stations={stations.data?.items ?? []}
       />
+
       <div className="grid gap-6 xl:grid-cols-2">
-        <RevenueTable deposits={deposits.data?.items ?? []} />
-        <RevenueClaimTable claims={claims.data?.items ?? []} />
-        <CarbonTable issuances={carbon.data?.items ?? []} />
-        <CarbonRetirementTable retirements={retirements.data?.items ?? []} />
-        <CertificateTable issuances={certificates.data?.items ?? []} />
-        <TableShell title="User Asset Summary" subtitle="Accounts">
-          <table className="min-w-full divide-y divide-zinc-200 text-left text-sm">
-            <thead className="bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500">
-              <tr>
-                <th className="px-5 py-3 font-semibold">Account</th>
-                <th className="px-5 py-3 font-semibold">Stations</th>
-                <th className="px-5 py-3 font-semibold">Revenue</th>
-                <th className="px-5 py-3 font-semibold">Carbon</th>
-                <th className="px-5 py-3 font-semibold">Certificates</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100">
-              {(accounts.data?.items ?? []).length === 0 ? (
-                <EmptyRow colSpan={5} />
-              ) : null}
-              {(accounts.data?.items ?? []).map((item) => (
-                <tr className="text-zinc-700" key={item.account}>
-                  <td className="px-5 py-4 font-mono">
-                    {shortAddress(item.account)}
-                  </td>
-                  <td className="px-5 py-4">{item.stationCount}</td>
-                  <td className="px-5 py-4">{formatWei(item.totalRevenueWei)}</td>
-                  <td className="px-5 py-4">
-                    {formatToken(item.carbonCreditBalance, "SWC")}
-                  </td>
-                  <td className="px-5 py-4">
-                    {Number(item.greenCertificateCount).toLocaleString()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </TableShell>
+        <RecordPanel
+          emptyLabel="Waiting for revenue events"
+          eyebrow="Revenue"
+          title="Revenue Activity"
+        >
+          {revenueRecords}
+        </RecordPanel>
+        <RecordPanel
+          emptyLabel="Waiting for carbon events"
+          eyebrow="Carbon"
+          title="Carbon Activity"
+        >
+          {carbonRecords}
+        </RecordPanel>
+        <RecordPanel
+          emptyLabel="Waiting for certificate batches"
+          eyebrow="Certificates"
+          title="Green Certificate Batches"
+        >
+          {certificateRecords}
+        </RecordPanel>
+        <AccountSummaryPanel items={accounts.data?.items ?? []} />
       </div>
     </section>
   );

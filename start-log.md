@@ -51,3 +51,31 @@ React Query：
 RPC不稳定
 需要缓存
 需要自动刷新
+
+### 第一次没有先创建
+anvil --chain-id 31337 --dump-state config/anvil-state.json
+
+anvil --chain-id 31337 --load-state config/anvil-state.json --dump-state config/anvil-state.json
+
+
+1. 停 API 和 INDEXER
+2. 启动 Anvil
+3. 重新部署合约
+4. 更新 config/chains.local.json 里的新合约地址
+5. 清 PG 旧数据
+TRUNCATE TABLE
+  asset.indexer_states,
+  asset.indexed_blocks,
+  asset.chain_events,
+  asset.stations,
+  asset.station_operation_statuses,
+  asset.revenue_deposits,
+  asset.revenue_claims,
+  asset.carbon_credit_issuances,
+  asset.carbon_credit_retirements,
+  asset.green_certificate_issuances,
+  asset.user_asset_summaries
+RESTART IDENTITY;
+6. 启动 API
+7. 启动 INDEXER
+8. 前端刷新

@@ -40,3 +40,7 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+
+# Go 调试生成的临时二进制文件
+__debug_bin
+debug

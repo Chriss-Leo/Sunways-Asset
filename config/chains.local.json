@@ -4,9 +4,9 @@
   "rpcUrl": "http://127.0.0.1:8545",
   "deployer": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
   "contracts": {
-    "PowerStationNFT": "0x8464135c8f25da09e49bc8782676a84730c318bc",
-    "RevenueVault": "0x71c95911e9a5d330f4d621842ec243ee1343292e",
-    "CarbonCreditToken": "0x948b3c65b89df0b4894abe91e6d02fe579834f8f",
-    "GreenCertificate": "0x712516e61c8b383df4a63cfe83d7701bce54b03e"
+    "PowerStationNFT": "0x8464135c8F25Da09e49BC8782676a84730C318bC",
+    "RevenueVault": "0x71C95911E9a5D330f4D621842EC243EE1343292e",
+    "CarbonCreditToken": "0x948B3c65b89DF0B4894ABE91E6D02FE579834F8F",
+    "GreenCertificate": "0x712516e61C8B383dF4A63CFe83d7701Bce54B03e"
   }
 }

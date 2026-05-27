@@ -198,6 +198,12 @@ func (i *Indexer) indexOnce(ctx context.Context, options RunOptions) error {
 		state.LastIndexedBlock = 0
 	}
 	if target <= state.LastIndexedBlock {
+		log.Printf(
+			"indexer tick latest=%d target=%d lastIndexed=%d status=idle",
+			latest,
+			target,
+			state.LastIndexedBlock,
+		)
 		return nil
 	}
 
@@ -210,6 +216,14 @@ func (i *Indexer) indexOnce(ctx context.Context, options RunOptions) error {
 		if to > target {
 			to = target
 		}
+		log.Printf(
+			"indexer tick latest=%d target=%d lastIndexed=%d scan=%d-%d",
+			latest,
+			target,
+			state.LastIndexedBlock,
+			from,
+			to,
+		)
 		if err := i.Scan(ctx, from, new(big.Int).SetUint64(to)); err != nil {
 			return err
 		}

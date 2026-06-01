@@ -4,7 +4,7 @@
 
 It seeds:
 
-- Power station NFT: `Station #1`
+- Power station NFT: `Sunways Jiangsu Solar Station 001` (Jiangsu, CN, 5,000 kW)
 - Native revenue deposit: default `12.48 ETH`
 - Carbon credits: default `18,420 SWC`
 - Green certificates: default `1,280` certificates for `2026-Q2`

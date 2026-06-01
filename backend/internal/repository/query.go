@@ -31,6 +31,129 @@ func (s *Store) UpsertChainEvent(event ChainEvent) error {
 	}).Create(&event).Error
 }
 
+func (s *Store) CreateOrganization(org Organization) (Organization, error) {
+	if org.Verification == "" {
+		org.Verification = "pending"
+	}
+	err := s.db.Create(&org).Error
+	return org, err
+}
+
+func (s *Store) ListOrganizations(limit int) ([]Organization, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 100
+	}
+	var items []Organization
+	err := s.db.Order("created_at desc").Limit(limit).Find(&items).Error
+	return items, err
+}
+
+func (s *Store) CreateOrganizationMember(member OrganizationMember) (OrganizationMember, error) {
+	if member.Status == "" {
+		member.Status = "active"
+	}
+	if member.Role == "" {
+		member.Role = "member"
+	}
+	err := s.db.Create(&member).Error
+	return member, err
+}
+
+func (s *Store) ListOrganizationMembers(orgID uint, limit int) ([]OrganizationMember, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 100
+	}
+	var items []OrganizationMember
+	query := s.db.Order("created_at desc").Limit(limit)
+	if orgID != 0 {
+		query = query.Where("organization_id = ?", orgID)
+	}
+	err := query.Find(&items).Error
+	return items, err
+}
+
+func (s *Store) CreateAssetDraft(asset AssetDraft) (AssetDraft, error) {
+	if asset.Status == "" {
+		asset.Status = "draft"
+	}
+	err := s.db.Create(&asset).Error
+	return asset, err
+}
+
+func (s *Store) ListAssetDrafts(status string, limit int) ([]AssetDraft, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 100
+	}
+	var items []AssetDraft
+	query := s.db.Order("updated_at desc").Limit(limit)
+	if status != "" {
+		query = query.Where("status = ?", status)
+	}
+	err := query.Find(&items).Error
+	return items, err
+}
+
+func (s *Store) GetAssetDraft(id uint) (AssetDraft, error) {
+	var asset AssetDraft
+	err := s.db.First(&asset, id).Error
+	return asset, err
+}
+
+func (s *Store) UpdateAssetDraftStatus(id uint, status string, note string) (AssetDraft, error) {
+	now := time.Now()
+	updates := map[string]any{
+		"status":      status,
+		"review_note": note,
+	}
+	switch status {
+	case "submitted":
+		updates["submitted_at"] = &now
+	case "approved":
+		updates["approved_at"] = &now
+	}
+	if err := s.db.Model(&AssetDraft{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+		return AssetDraft{}, err
+	}
+	return s.GetAssetDraft(id)
+}
+
+func (s *Store) CreateAssetFile(file AssetFile) (AssetFile, error) {
+	if file.IPFSURI == "" && file.CID != "" {
+		file.IPFSURI = "ipfs://" + file.CID
+	}
+	err := s.db.Create(&file).Error
+	return file, err
+}
+
+func (s *Store) ListAssetFiles(assetDraftID uint, limit int) ([]AssetFile, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 100
+	}
+	var items []AssetFile
+	query := s.db.Order("created_at desc").Limit(limit)
+	if assetDraftID != 0 {
+		query = query.Where("asset_draft_id = ?", assetDraftID)
+	}
+	err := query.Find(&items).Error
+	return items, err
+}
+
+func (s *Store) CreatePlatformAuditLog(log PlatformAuditLog) error {
+	if log.Result == "" {
+		log.Result = "success"
+	}
+	return s.db.Create(&log).Error
+}
+
+func (s *Store) ListPlatformAuditLogs(limit int) ([]PlatformAuditLog, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 100
+	}
+	var items []PlatformAuditLog
+	err := s.db.Order("created_at desc").Limit(limit).Find(&items).Error
+	return items, err
+}
+
 func (s *Store) UpsertStation(station Station) error {
 	return s.db.Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "chain_id"}, {Name: "station_id"}},

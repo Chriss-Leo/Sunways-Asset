@@ -3,6 +3,8 @@ import { PowerStationPanel } from "@/components/contracts/PowerStationPanel";
 import { AdminConsole } from "@/components/dashboard/AdminConsole";
 import { OperationsTables } from "@/components/dashboard/OperationsTables";
 import { PortfolioOverview } from "@/components/dashboard/PortfolioOverview";
+import { FileCenter } from "@/components/platform/FileCenter";
+import { PlatformWorkspace } from "@/components/platform/PlatformWorkspace";
 import { WalletStatus } from "@/components/wallet/WalletStatus";
 
 /**
@@ -22,6 +24,8 @@ export default function Home() {
         <section className="mx-auto flex w-full max-w-7xl flex-col gap-6">
           <WalletStatus />
           <PortfolioOverview />
+          <PlatformWorkspace />
+          <FileCenter />
           <PowerStationPanel />
           <OperationsTables />
           <AdminConsole />

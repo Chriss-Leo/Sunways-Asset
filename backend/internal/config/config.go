@@ -22,6 +22,13 @@ type Postgres struct {
 	MaxOpenConns int
 }
 
+type Filebase struct {
+	AccessKey string
+	SecretKey string
+	Bucket    string
+	GatewayURL string
+}
+
 type App struct {
 	APIAddr        string
 	FrontendOrigin string
@@ -31,6 +38,7 @@ type App struct {
 	Indexer        Indexer
 	Admin          Admin
 	Postgres       Postgres
+	Filebase       Filebase
 }
 
 type Indexer struct {
@@ -60,6 +68,12 @@ func Load() App {
 		},
 		Admin: Admin{
 			PrivateKey: env("ADMIN_PRIVATE_KEY", ""),
+		},
+		Filebase: Filebase{
+			AccessKey:  env("FILEBASE_ACCESS_KEY", ""),
+			SecretKey:  env("FILEBASE_SECRET_KEY", ""),
+			Bucket:     env("FILEBASE_BUCKET", ""),
+			GatewayURL: env("FILEBASE_GATEWAY_URL", "https://ipfs.filebase.io/ipfs"),
 		},
 		Postgres: Postgres{
 			Host:         env("POSTGRES_HOST", "127.0.0.1"),

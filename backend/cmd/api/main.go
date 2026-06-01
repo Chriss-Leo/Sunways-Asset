@@ -8,6 +8,7 @@ import (
 	"sunways-asset/backend/internal/auth"
 	"sunways-asset/backend/internal/blockchain"
 	"sunways-asset/backend/internal/config"
+	"sunways-asset/backend/internal/filebase"
 	"sunways-asset/backend/internal/httpapi"
 	"sunways-asset/backend/internal/repository"
 	"sunways-asset/backend/internal/wallet"
@@ -42,9 +43,13 @@ func main() {
 	if err != nil {
 		log.Fatalf("create admin service: %v", err)
 	}
+	filebaseSvc, err := filebase.New(cfg.Filebase.AccessKey, cfg.Filebase.SecretKey, cfg.Filebase.Bucket, cfg.Filebase.GatewayURL)
+	if err != nil {
+		log.Printf("filebase service not available: %v", err)
+	}
 	walletSvc := wallet.NewService(cfg.NonceTTL)
 	authSvc := auth.NewService(cfg.SessionTTL)
-	server := httpapi.NewServer(walletSvc, authSvc, store, adminSvc, chain.ChainID, cfg.FrontendOrigin)
+	server := httpapi.NewServer(walletSvc, authSvc, store, adminSvc, filebaseSvc, chain.ChainID, cfg.FrontendOrigin)
 
 	log.Printf("api listening on %s", cfg.APIAddr)
 	if err := server.Router().Run(cfg.APIAddr); err != nil {

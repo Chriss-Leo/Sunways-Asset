@@ -113,6 +113,85 @@ export type AdminTxResponse = {
   txHash: string;
 };
 
+export type Organization = {
+  id: number;
+  name: string;
+  type: string;
+  registrationNo: string;
+  contactName: string;
+  contactEmail: string;
+  contactPhone: string;
+  walletAddress: string;
+  verification: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type OrganizationMember = {
+  id: number;
+  organizationId: number;
+  walletAddress: string;
+  role: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AssetDraft = {
+  id: number;
+  organizationId: number;
+  name: string;
+  assetType: string;
+  country: string;
+  region: string;
+  address: string;
+  latitude: string;
+  longitude: string;
+  capacityKw: string;
+  expectedAnnualKwh: string;
+  expectedRevenue: string;
+  ownerWallet: string;
+  description: string;
+  status: string;
+  reviewNote: string;
+  metadataUri: string;
+  stationId?: number | null;
+  txHash: string;
+  submittedAt?: string | null;
+  approvedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AssetFile = {
+  id: number;
+  assetDraftId: number;
+  organizationId: number;
+  category: string;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  cid: string;
+  ipfsUri: string;
+  gatewayUrl: string;
+  uploader: string;
+  purpose: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PlatformAuditLog = {
+  id: number;
+  organizationId: number;
+  actor: string;
+  action: string;
+  resourceType: string;
+  resourceId: string;
+  result: string;
+  summary: string;
+  createdAt: string;
+};
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: {
@@ -180,6 +259,71 @@ export async function getIndexerStatus() {
   return request<IndexerStatus>("/indexer/status");
 }
 
+export async function getOrganizations() {
+  return request<{ items: Organization[] }>("/platform/organizations");
+}
+
+export async function createOrganization(payload: Partial<Organization>) {
+  return request<Organization>("/platform/organizations", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getOrganizationMembers(organizationId?: number) {
+  const query = organizationId ? `?organizationId=${organizationId}` : "";
+  return request<{ items: OrganizationMember[] }>(
+    `/platform/organization-members${query}`,
+  );
+}
+
+export async function createOrganizationMember(
+  payload: Partial<OrganizationMember>,
+) {
+  return request<OrganizationMember>("/platform/organization-members", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getAssetDrafts(status?: string) {
+  const query = status ? `?status=${encodeURIComponent(status)}` : "";
+  return request<{ items: AssetDraft[] }>(`/platform/assets${query}`);
+}
+
+export async function createAssetDraft(payload: Partial<AssetDraft>) {
+  return request<AssetDraft>("/platform/assets", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAssetDraftStatus(
+  id: number,
+  payload: { status: string; note: string; actor: string },
+) {
+  return request<AssetDraft>(`/platform/assets/${id}/status`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getAssetFiles(assetDraftId?: number) {
+  const query = assetDraftId ? `?assetDraftId=${assetDraftId}` : "";
+  return request<{ items: AssetFile[] }>(`/platform/files${query}`);
+}
+
+export async function createAssetFile(payload: Partial<AssetFile>) {
+  return request<AssetFile>("/platform/files", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getPlatformAuditLogs() {
+  return request<{ items: PlatformAuditLog[] }>("/platform/audit-logs");
+}
+
 export async function registerStation(payload: {
   owner: string;
   name: string;
@@ -238,6 +382,52 @@ export async function updateStationReview(
     method: "PATCH",
     body: JSON.stringify(payload),
   });
+}
+
+export async function uploadFileToFilebase(formData: FormData) {
+  return request<{
+    file: AssetFile;
+    upload: { cid: string; ipfsUri: string; gatewayUrl: string; sizeBytes: number };
+  }>("/platform/files/upload", {
+    method: "POST",
+    body: formData,
+    headers: {},
+  });
+}
+
+export type TokenMetadata = {
+  name: string;
+  description: string;
+  image: string;
+  external_url: string;
+  attributes: { trait_type: string; value: string }[];
+  documents: { name: string; uri: string; cid?: string }[];
+  asset_type: string;
+  capacity_kw: string;
+  region: string;
+  commissioned_at?: string;
+  created_at: string;
+};
+
+export async function generateAssetMetadata(assetDraftId: number) {
+  return request<{ metadata: TokenMetadata; metadataUri: string }>(
+    `/platform/assets/${assetDraftId}/metadata`,
+    { method: "POST" },
+  );
+}
+
+export type IssuanceCheckResult = {
+  ready: boolean;
+  assetId: number;
+  status: string;
+  metadataUri: string;
+  checks: { check: string; passed: boolean; message?: string }[];
+};
+
+export async function checkAssetIssuanceReady(assetDraftId: number) {
+  return request<IssuanceCheckResult>(
+    `/platform/assets/${assetDraftId}/issuance-check`,
+  );
 }
 
 export async function updateStationOperationStatus(

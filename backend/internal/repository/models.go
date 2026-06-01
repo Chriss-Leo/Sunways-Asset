@@ -39,6 +39,85 @@ type ChainEvent struct {
 	ObservedAt      time.Time `json:"observedAt"`
 }
 
+type Organization struct {
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	Name           string    `gorm:"size:255;not null;uniqueIndex" json:"name"`
+	Type           string    `gorm:"size:64;index" json:"type"`
+	RegistrationNo string    `gorm:"size:128;index" json:"registrationNo"`
+	ContactName    string    `gorm:"size:128" json:"contactName"`
+	ContactEmail   string    `gorm:"size:255" json:"contactEmail"`
+	ContactPhone   string    `gorm:"size:64" json:"contactPhone"`
+	WalletAddress  string    `gorm:"size:42;index" json:"walletAddress"`
+	Verification   string    `gorm:"size:32;index;default:pending" json:"verification"`
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
+}
+
+type OrganizationMember struct {
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	OrganizationID uint      `gorm:"index;uniqueIndex:idx_org_member_wallet" json:"organizationId"`
+	WalletAddress  string    `gorm:"size:42;index;uniqueIndex:idx_org_member_wallet" json:"walletAddress"`
+	Role           string    `gorm:"size:64;index" json:"role"`
+	Status         string    `gorm:"size:32;index;default:active" json:"status"`
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
+}
+
+type AssetDraft struct {
+	ID                uint       `gorm:"primaryKey" json:"id"`
+	OrganizationID    uint       `gorm:"index" json:"organizationId"`
+	Name              string     `gorm:"size:255;not null;index" json:"name"`
+	AssetType         string     `gorm:"size:64;index" json:"assetType"`
+	Country           string     `gorm:"size:64" json:"country"`
+	Region            string     `gorm:"size:255;index" json:"region"`
+	Address           string     `gorm:"size:512" json:"address"`
+	Latitude          string     `gorm:"size:64" json:"latitude"`
+	Longitude         string     `gorm:"size:64" json:"longitude"`
+	CapacityKW        string     `gorm:"size:80" json:"capacityKw"`
+	ExpectedAnnualKWh string     `gorm:"size:80" json:"expectedAnnualKwh"`
+	ExpectedRevenue   string     `gorm:"size:80" json:"expectedRevenue"`
+	OwnerWallet       string     `gorm:"size:42;index" json:"ownerWallet"`
+	Description       string     `gorm:"size:2048" json:"description"`
+	Status            string     `gorm:"size:32;index;default:draft" json:"status"`
+	ReviewNote        string     `gorm:"size:1024" json:"reviewNote"`
+	MetadataURI       string     `gorm:"size:1024" json:"metadataUri"`
+	StationID         *uint64    `gorm:"index" json:"stationId"`
+	TxHash            string     `gorm:"size:66" json:"txHash"`
+	SubmittedAt       *time.Time `json:"submittedAt"`
+	ApprovedAt        *time.Time `json:"approvedAt"`
+	CreatedAt         time.Time  `json:"createdAt"`
+	UpdatedAt         time.Time  `json:"updatedAt"`
+}
+
+type AssetFile struct {
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	AssetDraftID   uint      `gorm:"index" json:"assetDraftId"`
+	OrganizationID uint      `gorm:"index" json:"organizationId"`
+	Category       string    `gorm:"size:64;index" json:"category"`
+	OriginalName   string    `gorm:"size:255" json:"originalName"`
+	MimeType       string    `gorm:"size:128" json:"mimeType"`
+	SizeBytes      int64     `json:"sizeBytes"`
+	CID            string    `gorm:"size:128;index" json:"cid"`
+	IPFSURI        string    `gorm:"size:1024" json:"ipfsUri"`
+	GatewayURL     string    `gorm:"size:1024" json:"gatewayUrl"`
+	Uploader       string    `gorm:"size:42;index" json:"uploader"`
+	Purpose        string    `gorm:"size:255" json:"purpose"`
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
+}
+
+type PlatformAuditLog struct {
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	OrganizationID uint      `gorm:"index" json:"organizationId"`
+	Actor          string    `gorm:"size:42;index" json:"actor"`
+	Action         string    `gorm:"size:128;index" json:"action"`
+	ResourceType   string    `gorm:"size:64;index" json:"resourceType"`
+	ResourceID     string    `gorm:"size:64;index" json:"resourceId"`
+	Result         string    `gorm:"size:32;index" json:"result"`
+	Summary        string    `gorm:"size:2048" json:"summary"`
+	CreatedAt      time.Time `json:"createdAt"`
+}
+
 type Station struct {
 	ID             uint       `gorm:"primaryKey" json:"id"`
 	ChainID        int64      `gorm:"uniqueIndex:idx_station_chain_station" json:"chainId"`

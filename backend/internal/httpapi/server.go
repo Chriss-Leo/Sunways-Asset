@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -9,6 +10,8 @@ import (
 
 	"sunways-asset/backend/internal/admin"
 	"sunways-asset/backend/internal/auth"
+	"sunways-asset/backend/internal/filebase"
+	"sunways-asset/backend/internal/metadata"
 	"sunways-asset/backend/internal/repository"
 	"sunways-asset/backend/internal/wallet"
 
@@ -21,6 +24,7 @@ type Server struct {
 	admin          *admin.Service
 	auth           *auth.Service
 	chainID        int64
+	filebase       *filebase.Service
 	frontendOrigin string
 	store          *repository.Store
 	wallet         *wallet.Service
@@ -32,6 +36,7 @@ func NewServer(
 	authSvc *auth.Service,
 	store *repository.Store,
 	adminSvc *admin.Service,
+	filebaseSvc *filebase.Service,
 	chainID int64,
 	frontendOrigin string,
 ) *Server {
@@ -39,6 +44,7 @@ func NewServer(
 		admin:          adminSvc,
 		auth:           authSvc,
 		chainID:        chainID,
+		filebase:       filebaseSvc,
 		frontendOrigin: frontendOrigin,
 		store:          store,
 		wallet:         walletSvc,
@@ -67,6 +73,20 @@ func (s *Server) Router() *gin.Engine {
 	router.GET("/accounts/summaries", s.listAccountSummaries)
 	router.GET("/indexer/status", s.indexerStatus)
 	router.GET("/dashboard/summary", s.dashboardSummary)
+	router.GET("/platform/organizations", s.listOrganizations)
+	router.POST("/platform/organizations", s.createOrganization)
+	router.GET("/platform/organization-members", s.listOrganizationMembers)
+	router.POST("/platform/organization-members", s.createOrganizationMember)
+	router.GET("/platform/assets", s.listAssetDrafts)
+	router.POST("/platform/assets", s.createAssetDraft)
+	router.GET("/platform/assets/:id", s.getAssetDraft)
+	router.PATCH("/platform/assets/:id/status", s.updateAssetDraftStatus)
+	router.GET("/platform/files", s.listAssetFiles)
+	router.POST("/platform/files", s.createAssetFile)
+	router.GET("/platform/audit-logs", s.listPlatformAuditLogs)
+	router.POST("/platform/files/upload", s.uploadFileToFilebase)
+	router.POST("/platform/assets/:id/metadata", s.generateAssetMetadata)
+	router.GET("/platform/assets/:id/issuance-check", s.checkAssetIssuanceReady)
 	router.POST("/admin/stations", s.adminRegisterStation)
 	router.POST("/admin/revenue-deposits", s.adminDepositRevenue)
 	router.POST("/admin/carbon-credits", s.adminMintCarbon)
@@ -270,6 +290,201 @@ func (s *Server) indexerStatus(c *gin.Context) {
 	})
 }
 
+func (s *Server) createOrganization(c *gin.Context) {
+	var req repository.Organization
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeError(c, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if strings.TrimSpace(req.Name) == "" {
+		writeError(c, http.StatusBadRequest, "organization name is required")
+		return
+	}
+	org, err := s.store.CreateOrganization(req)
+	if err != nil {
+		writeError(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	_ = s.store.CreatePlatformAuditLog(repository.PlatformAuditLog{
+		OrganizationID: org.ID,
+		Actor:          org.WalletAddress,
+		Action:         "organization.create",
+		ResourceType:   "organization",
+		ResourceID:     strconv.FormatUint(uint64(org.ID), 10),
+		Result:         "success",
+		Summary:        org.Name,
+	})
+	c.JSON(http.StatusCreated, org)
+}
+
+func (s *Server) listOrganizations(c *gin.Context) {
+	items, err := s.store.ListOrganizations(limitFromQuery(c, 100))
+	writeList(c, items, err, "failed to list organizations")
+}
+
+func (s *Server) createOrganizationMember(c *gin.Context) {
+	var req repository.OrganizationMember
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeError(c, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.OrganizationID == 0 || strings.TrimSpace(req.WalletAddress) == "" {
+		writeError(c, http.StatusBadRequest, "organizationId and walletAddress are required")
+		return
+	}
+	member, err := s.store.CreateOrganizationMember(req)
+	if err != nil {
+		writeError(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	_ = s.store.CreatePlatformAuditLog(repository.PlatformAuditLog{
+		OrganizationID: member.OrganizationID,
+		Actor:          member.WalletAddress,
+		Action:         "organization.member.create",
+		ResourceType:   "organization_member",
+		ResourceID:     strconv.FormatUint(uint64(member.ID), 10),
+		Result:         "success",
+		Summary:        member.Role,
+	})
+	c.JSON(http.StatusCreated, member)
+}
+
+func (s *Server) listOrganizationMembers(c *gin.Context) {
+	orgID := uintFromQuery(c, "organizationId")
+	items, err := s.store.ListOrganizationMembers(orgID, limitFromQuery(c, 100))
+	writeList(c, items, err, "failed to list organization members")
+}
+
+func (s *Server) createAssetDraft(c *gin.Context) {
+	var req repository.AssetDraft
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeError(c, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if strings.TrimSpace(req.Name) == "" {
+		writeError(c, http.StatusBadRequest, "asset name is required")
+		return
+	}
+	if req.OrganizationID == 0 {
+		writeError(c, http.StatusBadRequest, "organizationId is required")
+		return
+	}
+	asset, err := s.store.CreateAssetDraft(req)
+	if err != nil {
+		writeError(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	_ = s.store.CreatePlatformAuditLog(repository.PlatformAuditLog{
+		OrganizationID: asset.OrganizationID,
+		Actor:          asset.OwnerWallet,
+		Action:         "asset_draft.create",
+		ResourceType:   "asset_draft",
+		ResourceID:     strconv.FormatUint(uint64(asset.ID), 10),
+		Result:         "success",
+		Summary:        asset.Name,
+	})
+	c.JSON(http.StatusCreated, asset)
+}
+
+func (s *Server) listAssetDrafts(c *gin.Context) {
+	items, err := s.store.ListAssetDrafts(c.Query("status"), limitFromQuery(c, 100))
+	writeList(c, items, err, "failed to list asset drafts")
+}
+
+func (s *Server) getAssetDraft(c *gin.Context) {
+	id, ok := uintParam(c, "id")
+	if !ok {
+		return
+	}
+	asset, err := s.store.GetAssetDraft(id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			writeError(c, http.StatusNotFound, "asset draft not found")
+			return
+		}
+		writeError(c, http.StatusInternalServerError, "failed to get asset draft")
+		return
+	}
+	c.JSON(http.StatusOK, asset)
+}
+
+func (s *Server) updateAssetDraftStatus(c *gin.Context) {
+	id, ok := uintParam(c, "id")
+	if !ok {
+		return
+	}
+	var req struct {
+		Status string `json:"status"`
+		Note   string `json:"note"`
+		Actor  string `json:"actor"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeError(c, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.Status == "" {
+		writeError(c, http.StatusBadRequest, "status is required")
+		return
+	}
+	asset, err := s.store.UpdateAssetDraftStatus(id, req.Status, req.Note)
+	if err != nil {
+		writeError(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	_ = s.store.CreatePlatformAuditLog(repository.PlatformAuditLog{
+		OrganizationID: asset.OrganizationID,
+		Actor:          req.Actor,
+		Action:         "asset_draft.status.update",
+		ResourceType:   "asset_draft",
+		ResourceID:     strconv.FormatUint(uint64(asset.ID), 10),
+		Result:         "success",
+		Summary:        req.Status,
+	})
+	c.JSON(http.StatusOK, asset)
+}
+
+func (s *Server) createAssetFile(c *gin.Context) {
+	var req repository.AssetFile
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeError(c, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.AssetDraftID == 0 || req.OrganizationID == 0 {
+		writeError(c, http.StatusBadRequest, "assetDraftId and organizationId are required")
+		return
+	}
+	if strings.TrimSpace(req.CID) == "" && strings.TrimSpace(req.IPFSURI) == "" {
+		writeError(c, http.StatusBadRequest, "cid or ipfsUri is required")
+		return
+	}
+	file, err := s.store.CreateAssetFile(req)
+	if err != nil {
+		writeError(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	_ = s.store.CreatePlatformAuditLog(repository.PlatformAuditLog{
+		OrganizationID: file.OrganizationID,
+		Actor:          file.Uploader,
+		Action:         "asset_file.create",
+		ResourceType:   "asset_file",
+		ResourceID:     strconv.FormatUint(uint64(file.ID), 10),
+		Result:         "success",
+		Summary:        file.OriginalName,
+	})
+	c.JSON(http.StatusCreated, file)
+}
+
+func (s *Server) listAssetFiles(c *gin.Context) {
+	assetDraftID := uintFromQuery(c, "assetDraftId")
+	items, err := s.store.ListAssetFiles(assetDraftID, limitFromQuery(c, 100))
+	writeList(c, items, err, "failed to list asset files")
+}
+
+func (s *Server) listPlatformAuditLogs(c *gin.Context) {
+	items, err := s.store.ListPlatformAuditLogs(limitFromQuery(c, 100))
+	writeList(c, items, err, "failed to list platform audit logs")
+}
+
 func (s *Server) adminRegisterStation(c *gin.Context) {
 	var req admin.RegisterStationRequest
 	if !s.bindAdmin(c, &req) {
@@ -364,6 +579,193 @@ func (s *Server) adminUpdateStationOperationStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
+func (s *Server) uploadFileToFilebase(c *gin.Context) {
+	file, header, err := c.Request.FormFile("file")
+	if err != nil {
+		writeError(c, http.StatusBadRequest, "file is required")
+		return
+	}
+	defer file.Close()
+
+	if s.filebase == nil || !s.filebase.Enabled() {
+		writeError(c, http.StatusServiceUnavailable, "filebase service is not configured")
+		return
+	}
+
+	category := c.PostForm("category")
+	if category == "" {
+		category = "general"
+	}
+	assetDraftID := uintFromForm(c, "assetDraftId")
+	organizationID := uintFromForm(c, "organizationId")
+	uploader := c.PostForm("uploader")
+
+	result, err := s.filebase.Upload(c.Request.Context(), header.Filename, file, header.Size)
+	if err != nil {
+		writeError(c, http.StatusInternalServerError, fmt.Sprintf("upload to filebase failed: %v", err))
+		return
+	}
+
+	dbFile := repository.AssetFile{
+		AssetDraftID:   assetDraftID,
+		OrganizationID: organizationID,
+		Category:       category,
+		OriginalName:   header.Filename,
+		MimeType:       header.Header.Get("Content-Type"),
+		SizeBytes:      header.Size,
+		CID:            result.CID,
+		IPFSURI:        result.IPFSURI,
+		GatewayURL:     result.GatewayURL,
+		Uploader:       uploader,
+	}
+
+	record, err := s.store.CreateAssetFile(dbFile)
+	if err != nil {
+		writeError(c, http.StatusInternalServerError, "failed to save file record")
+		return
+	}
+
+	_ = s.store.CreatePlatformAuditLog(repository.PlatformAuditLog{
+		OrganizationID: organizationID,
+		Actor:          uploader,
+		Action:         "asset_file.upload",
+		ResourceType:   "asset_file",
+		ResourceID:     strconv.FormatUint(uint64(record.ID), 10),
+		Result:         "success",
+		Summary:        fmt.Sprintf("%s (cid: %s)", header.Filename, result.CID),
+	})
+
+	c.JSON(http.StatusCreated, gin.H{"file": record, "upload": result})
+}
+
+func (s *Server) generateAssetMetadata(c *gin.Context) {
+	id, ok := uintParam(c, "id")
+	if !ok {
+		return
+	}
+
+	asset, err := s.store.GetAssetDraft(id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			writeError(c, http.StatusNotFound, "asset draft not found")
+			return
+		}
+		writeError(c, http.StatusInternalServerError, "failed to get asset draft")
+		return
+	}
+
+	files, err := s.store.ListAssetFiles(id, 100)
+	if err != nil {
+		writeError(c, http.StatusInternalServerError, "failed to list asset files")
+		return
+	}
+
+	meta := metadata.Generate(asset, files)
+	metaBytes, err := metadata.Marshal(meta)
+	if err != nil {
+		writeError(c, http.StatusInternalServerError, "failed to serialize metadata")
+		return
+	}
+
+	var metadataURI string
+	if s.filebase != nil && s.filebase.Enabled() {
+		name := fmt.Sprintf("metadata-%d.json", id)
+		result, uploadErr := s.filebase.UploadBytes(c.Request.Context(), name, metaBytes)
+		if uploadErr != nil {
+			writeError(c, http.StatusInternalServerError, fmt.Sprintf("upload metadata to ipfs failed: %v", uploadErr))
+			return
+		}
+		metadataURI = result.IPFSURI
+
+		_ = s.store.CreatePlatformAuditLog(repository.PlatformAuditLog{
+			OrganizationID: asset.OrganizationID,
+			Actor:          "system",
+			Action:         "asset_metadata.generate",
+			ResourceType:   "asset_draft",
+			ResourceID:     strconv.FormatUint(uint64(id), 10),
+			Result:         "success",
+			Summary:        fmt.Sprintf("metadata uploaded to %s", result.IPFSURI),
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"metadata":    meta,
+		"metadataUri": metadataURI,
+	})
+}
+
+func (s *Server) checkAssetIssuanceReady(c *gin.Context) {
+	id, ok := uintParam(c, "id")
+	if !ok {
+		return
+	}
+
+	asset, err := s.store.GetAssetDraft(id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			writeError(c, http.StatusNotFound, "asset draft not found")
+			return
+		}
+		writeError(c, http.StatusInternalServerError, "failed to get asset draft")
+		return
+	}
+
+	checks := make([]gin.H, 0)
+	allPassed := true
+
+	statusCheck := gin.H{"check": "status_approved", "passed": asset.Status == "approved"}
+	if asset.Status != "approved" {
+		statusCheck["message"] = fmt.Sprintf("asset status is '%s', must be 'approved'", asset.Status)
+		allPassed = false
+	}
+	checks = append(checks, statusCheck)
+
+	metadataCheck := gin.H{"check": "metadata_ready", "passed": asset.MetadataURI != ""}
+	if asset.MetadataURI == "" {
+		metadataCheck["message"] = "metadata URI is not set"
+		allPassed = false
+	}
+	checks = append(checks, metadataCheck)
+
+	walletCheck := gin.H{"check": "wallet_valid", "passed": strings.HasPrefix(asset.OwnerWallet, "0x") && len(asset.OwnerWallet) == 42}
+	if !walletCheck["passed"].(bool) {
+		walletCheck["message"] = "owner wallet address is invalid"
+		allPassed = false
+	}
+	checks = append(checks, walletCheck)
+
+	nameCheck := gin.H{"check": "name_set", "passed": strings.TrimSpace(asset.Name) != ""}
+	if !nameCheck["passed"].(bool) {
+		nameCheck["message"] = "asset name is required"
+		allPassed = false
+	}
+	checks = append(checks, nameCheck)
+
+	files, err := s.store.ListAssetFiles(id, 100)
+	fileCheck := gin.H{"check": "has_files", "passed": err == nil && len(files) > 0}
+	if !fileCheck["passed"].(bool) {
+		fileCheck["message"] = "no files attached to asset"
+		allPassed = false
+	}
+	checks = append(checks, fileCheck)
+
+	existingStation := asset.StationID != nil
+	dupCheck := gin.H{"check": "not_already_minted", "passed": !existingStation}
+	if existingStation {
+		dupCheck["message"] = fmt.Sprintf("asset already minted as station %d", *asset.StationID)
+		allPassed = false
+	}
+	checks = append(checks, dupCheck)
+
+	c.JSON(http.StatusOK, gin.H{
+		"ready":      allPassed,
+		"assetId":    id,
+		"status":     asset.Status,
+		"metadataUri": asset.MetadataURI,
+		"checks":     checks,
+	})
+}
+
 func (s *Server) bindAdmin(c *gin.Context, req any) bool {
 	if s.admin == nil || !s.admin.Enabled() {
 		writeError(c, http.StatusServiceUnavailable, "admin transaction service is not configured")
@@ -436,6 +838,39 @@ func limitFromQuery(c *gin.Context, fallback int) int {
 		return fallback
 	}
 	return parsed
+}
+
+func uintFromQuery(c *gin.Context, key string) uint {
+	raw := c.Query(key)
+	if raw == "" {
+		return 0
+	}
+	parsed, err := strconv.ParseUint(raw, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return uint(parsed)
+}
+
+func uintFromForm(c *gin.Context, key string) uint {
+	raw := c.PostForm(key)
+	if raw == "" {
+		return 0
+	}
+	parsed, err := strconv.ParseUint(raw, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return uint(parsed)
+}
+
+func uintParam(c *gin.Context, key string) (uint, bool) {
+	parsed, err := strconv.ParseUint(c.Param(key), 10, 64)
+	if err != nil {
+		writeError(c, http.StatusBadRequest, "invalid id")
+		return 0, false
+	}
+	return uint(parsed), true
 }
 
 func writeList(c *gin.Context, items any, err error, message string) {

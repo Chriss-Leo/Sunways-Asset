@@ -1,10 +1,12 @@
 # Sunways Asset 开发步骤说明文档
 
-更新时间：2026-05-15
+更新时间：2026-06-01
 
-本文档面向当前 `sunways-asset` 项目的逐步开发。当前仓库已经包含 Next.js 前端、Go 后端和 `contracts/` Foundry 合约工程；依赖包含 `next@16.2.6`、React 19、wagmi、viem、RainbowKit、Tailwind CSS 4。下面按“本地链优先闭环、后端索引业务化、前端产品化、再上测试网/主网”的顺序推进。
+本文档面向当前 `sunways-asset` 项目的逐步开发。当前仓库已经包含 Next.js 前端、Go 后端和 `contracts/` Foundry 合约工程；依赖包含 `next@16.2.6`、React 19、wagmi、viem、RainbowKit、Tailwind CSS 4。下面按”本地链优先闭环、后端索引业务化、前端产品化、再上测试网/主网”的顺序推进。
 
-当前进度：P1 钱包连接、P2 钱包签名登录已完成；P3 合约基础已开始，第一版合约覆盖电站 NFT、收益分红、碳积分和绿色节能证书。
+当前进度：P0 基础环境 ~ P7 后端 API 查询已全部完成。P8 设备数据预言机已部分完成（运维状态、利用率追踪已实现，mock 数据自动生成待完成）。P9 收益结算的合约层已完成（RevenueVault），后端已索引收益事件并计算用户汇总，但自动化结算任务尚未实现。P10 P2P 交易尚未开始。
+
+此外，平台工作台（组织管理、资产草稿生命周期、IPFS/Filebase 集成）和管理控制台（Admin 代理服务、链上操作 UI）也已实现。
 
 > 说明：能源资产、RWA、收益权、碳资产、证券属性等可能涉及合规要求。本文是工程开发路线，不构成法律、金融或投资建议。
 
@@ -263,21 +265,69 @@ chain_id + contract_address + tx_hash + log_index
 - 事件处理保持幂等。
 - 合约升级或事件变更时使用版本号。
 
-### 5.4 API 第一版
+### 5.4 API 第一版（已实现，共 30+ 端点）
+
+已实现的端点按模块分组：
 
 ```text
+# 健康检查
 GET  /health
-GET  /chains
-GET  /assets
-GET  /assets/:id
-GET  /assets/:id/events
-GET  /accounts/:address/positions
-GET  /accounts/:address/revenues
+
+# 钱包认证
 POST /auth/nonce
 POST /auth/verify
+GET  /auth/me
+POST /auth/logout
+
+# 资产查询
+GET  /stations
+GET  /stations/:id
+GET  /stations/operation-statuses
+GET  /dashboard/summary
+
+# 收益
+GET  /revenue/deposits
+GET  /revenue/claims
+
+# 碳积分
+GET  /carbon/issuances
+GET  /carbon/retirements
+
+# 绿证
+GET  /certificates/issuances
+
+# 账户
+GET  /accounts/summaries
+
+# 索引器
+GET  /indexer/status
+
+# 平台工作台
+GET    /platform/organizations
+POST   /platform/organizations
+GET    /platform/organization-members
+POST   /platform/organization-members
+GET    /platform/assets
+POST   /platform/assets
+GET    /platform/assets/:id
+PATCH  /platform/assets/:id/status
+GET    /platform/files
+POST   /platform/files
+POST   /platform/files/upload
+POST   /platform/assets/:id/metadata
+GET    /platform/assets/:id/issuance-check
+GET    /platform/audit-logs
+
+# 管理操作（后端代理签名）
+POST  /admin/stations
+POST  /admin/revenue-deposits
+POST  /admin/carbon-credits
+POST  /admin/green-certificates
+PATCH /admin/stations/:id/review
+PATCH /admin/stations/:id/operation-status
 ```
 
-涉及发交易的操作优先让前端钱包签名；后端只在确有运营需求时用受控热钱包或多签执行。
+涉及发交易的操作：前端钱包签名优先；后端 Admin 代理仅在配置了 `ADMIN_PRIVATE_KEY` 时可用，用于运营管理场景。
 
 ## 6. 第三阶段：Next.js 前端
 
@@ -453,27 +503,27 @@ security:
 ### M1：本地链资产闭环
 
 - [x] `contracts/` Foundry 工程完成。
-- [ ] Anvil 本地链固定 chain id。
+- [x] Anvil 本地链固定 chain id（`config/chains.local.json`）。
 - [x] `PowerStationNFT` 可注册电站资产。
-- [x] 部署脚本可部署第一组合约。
+- [x] 部署脚本可部署第一组合约（4 个合约：PowerStationNFT、RevenueVault、CarbonCreditToken、GreenCertificate）。
 - [x] 前端可连接本地链。
-- [ ] 首页显示链 ID、账户、资产列表。
+- [x] 首页显示链 ID、账户、资产列表（WalletStatus + PortfolioOverview）。
 
 ### M2：收益闭环
 
 - [x] `RevenueVault` 支持充值和领取。
 - [ ] Foundry 测试覆盖收益守恒。
-- [ ] Go indexer 可监听收益事件。
-- [ ] 前端显示可领取收益。
-- [ ] 用户可通过钱包发起 claim。
+- [x] Go indexer 可监听收益事件（RevenueDeposited、RevenueClaimed）。
+- [x] 前端显示可领取收益（PortfolioOverview 后端数据 + 链上 fallback）。
+- [ ] 用户可通过钱包发起 claim（Admin 面板已支持 deposit，前端用户 claim 待实现）。
 
 ### M3：后端业务化
 
-- [ ] PostgreSQL schema 完成。
-- [ ] indexer 支持重放和确认数。
-- [ ] API 提供资产、事件、持仓、收益查询。
-- [ ] SIWE 登录完成。
-- [ ] 管理角色和审计日志完成。
+- [x] PostgreSQL schema 完成（16 张表 via GORM AutoMigrate）。
+- [x] indexer 支持重放和确认数（MarkIndexerSuccess/Failure、confirmations 配置）。
+- [x] API 提供资产、事件、持仓、收益查询（30+ 端点）。
+- [x] SIWE 登录完成（wallet + auth 模块）。
+- [x] 管理角色和审计日志完成（PlatformAuditLog + admin 路由）。
 
 ### M4：测试网
 
@@ -988,19 +1038,110 @@ internal/blockchain/tx
 
 这个顺序很重要：交易必须排在资产、身份、数据、收益之后。否则你会先做出交易壳子，但没有可信资产、可信数据和可审计收益。
 
+## 13-bis. 已实现的平台工作流（超出原计划的增量功能）
+
+以下功能在 P3-P7 实施过程中自然地演进出来，用于支撑资产从"线下草稿"到"链上发行"的完整生命周期。
+
+### 组织管理
+
+在资产注册之前，先建立组织身份：
+
+- `POST /platform/organizations`：创建组织（名称、类型、注册号、联系方式、钱包地址）。
+- `GET /platform/organizations`：列出所有组织。
+- `POST /platform/organization-members`：添加组织成员（角色：admin / member）。
+- `GET /platform/organization-members`：按组织查询成员。
+
+数据模型：[backend/internal/repository/models.go](backend/internal/repository/models.go) 中的 `Organization` / `OrganizationMember`。
+
+### 资产草稿生命周期
+
+在链上 mint 之前，资产以草稿形式在平台内流转：
+
+```
+draft → submitted → approved → (metadata 生成 + IPFS 上传) → 链上 mint（成为 Station NFT）
+```
+
+API：
+- `POST /platform/assets`：创建资产草稿（名称、类型、地区、容量、预期收益、钱包地址等）。
+- `GET /platform/assets?status=xxx`：按状态筛选草稿列表。
+- `GET /platform/assets/:id`：查看单个草稿。
+- `PATCH /platform/assets/:id/status`：状态变更（提交审核 / 批准 / 驳回），记录审核意见。
+- `POST /platform/assets/:id/metadata`：根据草稿字段 + 关联文件生成 ERC-721 metadata JSON，并上传到 IPFS。
+- `GET /platform/assets/:id/issuance-check`：发行前检查清单（状态是否为 approved、metadata URI 是否已设置、钱包地址是否合法、是否有上传文件、是否已经 mint 过）。
+
+数据模型：`AssetDraft`（[backend/internal/repository/models.go:66-90](backend/internal/repository/models.go#L66-L90)）。
+
+### 文件管理 + IPFS
+
+- `POST /platform/files/upload`：通过 Filebase S3 兼容 API 上传文件到 IPFS，返回 CID、IPFS URI、Gateway URL。
+- `POST /platform/files`：记录文件元数据（关联到资产草稿和组织）。
+- `GET /platform/files?assetDraftId=xxx`：按资产草稿查询文件列表。
+
+实现：[backend/internal/filebase/service.go](backend/internal/filebase/service.go)，通过 AWS SDK 对接 Filebase 的 S3 兼容接口。配置项：
+- `FILEBASE_ACCESS_KEY` / `FILEBASE_SECRET_KEY` / `FILEBASE_BUCKET` / `FILEBASE_GATEWAY_URL`
+
+### 元数据生成
+
+[backend/internal/metadata/service.go](backend/internal/metadata/service.go) 根据资产草稿生成符合 ERC-721 Metadata JSON 标准的 metadata，包含：
+- 名称、描述、图片
+- 属性列表（资产类型、国家、地区、容量、预期年发电量、预期收益、经纬度）
+- 关联文档列表（从 AssetFile 中提取的 IPFS 链接）
+- 可直接上传到 IPFS 作为 `tokenURI`
+
+### 管理后台链上操作
+
+[backend/internal/admin/service.go](backend/internal/admin/service.go) 支持后端用配置的私钥签名并发送交易：
+
+- `POST /admin/stations`：调用 PowerStationNFT.registerStation() 链上注册。
+- `POST /admin/revenue-deposits`：调用 RevenueVault.depositNative() 入账收益。
+- `POST /admin/carbon-credits`：调用 CarbonCreditToken.mintCarbonCredits() 发行碳积分。
+- `POST /admin/green-certificates`：调用 GreenCertificate.issueCertificate() 发行绿证。
+- `PATCH /admin/stations/:id/review`：更新数据库中的审核状态（不涉及链上交易）。
+- `PATCH /admin/stations/:id/operation-status`：更新运维状态和利用率（不涉及链上交易）。
+
+前端对应组件：[src/components/dashboard/AdminConsole.tsx](src/components/dashboard/AdminConsole.tsx)。
+
+### 运维状态追踪
+
+`StationOperationStatus` 表（[backend/internal/repository/models.go:141-150](backend/internal/repository/models.go#L141-L150)）记录每个电站的运行状态：
+- 状态（normal / warning / fault / maintenance）
+- 利用率百分比
+- 备注
+- 更新人和更新时间
+
+### 审计日志
+
+所有平台操作写入 `PlatformAuditLog` 表（[backend/internal/repository/models.go:109-119](backend/internal/repository/models.go#L109-L119)），记录：
+- 组织 ID、操作人地址
+- 操作类型、资源类型、资源 ID
+- 操作结果和摘要
+- 可通过 `GET /platform/audit-logs` 查询。
+
+### 三层数据源策略
+
+前端的数据展示采用三层 fallback 策略：
+1. **Backend**：优先从 Go API 读取索引后的聚合数据。
+2. **On-chain**：API 不可用时直接从合约读取链上数据。
+3. **Mock**：链也不可用时使用本地 mock 数据保证 UI 不白屏。
+
+实现见 [src/components/dashboard/PortfolioOverview.tsx](src/components/dashboard/PortfolioOverview.tsx) 的 `metrics` 数组逻辑。
+
 ## 14. 当前最应该做的下一步
 
-你的下一步应该做 **P3 本地部署与 ABI/地址同步**。P1 钱包连接、P2 钱包签名登录已经完成，第一版合约也已经能通过 Foundry 测试；现在要把合约部署到 Anvil，并把地址和 ABI 交给前端/后端使用。
+你的下一步应该做 **P8 设备数据 Oracle**。P0~P7 已经全部完成——钱包连接、签名登录、合约部署、前端链上读取、后端事件索引、API 查询、平台工作台和管理控制台都已就绪。
 
 具体执行顺序：
 
-1. 启动 Anvil：`anvil --chain-id 31337`。
-2. 运行 `contracts/script/DeploySunways.s.sol` 部署电站 NFT、收益金库、碳积分、绿证合约。
-3. 把部署地址写入共享配置，例如 `config/chains.local.json`。
-4. 抽取 ABI 到 `src/contracts/`，让前端用 wagmi/viem 读取电站 NFT。
-5. 后端增加 `internal/blockchain` 基础层，为事件监听和地址配置做准备。
+1. 在 Go 后端 `internal/oracle` 中实现定时任务，按资产生成模拟设备数据（发电量、储能状态、运行状态）。
+2. 设备数据写入数据库，对数据做 hash 或签名证明。
+3. 必要时将关键字段通过合约事件上链（如日均发电量、设备状态变更）。
+4. 前端在资产详情页展示设备数据时间序列。
+5. 之后进入 P9 收益结算——将设备数据作为收益计算的输入，自动计算用户可领取金额。
 
-这一步完成后，首页就可以从“钱包状态页”升级成“电站资产控制台”的第一版。
+当前已完成的 P8 前置条件：
+- `station_operation_statuses` 表已建，支持利用率和运行状态更新。
+- `internal/admin/service.go` 已具备后端签名发交易能力，可直接用于数据上链。
+- `internal/worker` 目录预留，可放置定时任务。
 
 ## 15. 参考资料
 

@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { parseEther } from "viem";
 import { useAccount } from "wagmi";
+import { useT } from "@/i18n";
 import {
   depositRevenue,
   issueGreenCertificate,
@@ -23,6 +24,7 @@ function shortAddress(address: string) {
 }
 
 function TxResult({ error, value }: { error?: Error | null; value?: string }) {
+  const { t } = useT();
   if (error) {
     return (
       <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -36,7 +38,7 @@ function TxResult({ error, value }: { error?: Error | null; value?: string }) {
   return (
     <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2">
       <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
-        Submitted
+        {t("admin.submitted")}
       </p>
       <p className="mt-1 truncate font-mono text-xs text-emerald-800">{value}</p>
     </div>
@@ -116,7 +118,7 @@ function ActionCard({
           {eyebrow}
         </p>
         <h3 className="mt-1 text-lg font-semibold text-zinc-950">{title}</h3>
-        <p className="mt-2 text-sm leading-6 text-zinc-600">{detail}</p>
+        <p className="mt-2 text-sm leading-6 text-zinc-600 min-h-[2.5rem]">{detail}</p>
       </div>
       <div className="p-5">{children}</div>
     </article>
@@ -124,6 +126,7 @@ function ActionCard({
 }
 
 export function AdminConsole() {
+  const { t } = useT();
   const { address } = useAccount();
   const queryClient = useQueryClient();
   const account: string = address ?? fallbackAccount;
@@ -241,18 +244,16 @@ export function AdminConsole() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
-              Admin Console
+              {t("admin.title")}
             </p>
-            <h2 className="mt-1 text-2xl font-semibold">Chain Operations</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-300">
-              Submit station, revenue, carbon, and certificate actions to the
-              local chain, then let the indexer synchronize them back into the
-              dashboard.
+            <h2 className="mt-1 text-2xl font-semibold">{t("admin.heading")}</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-300 min-h-[2.5rem]">
+              {t("admin.description")}
             </p>
           </div>
           <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
-              Operator
+              {t("admin.operator")}
             </p>
             <p className="mt-1 font-mono text-sm text-white">
               {shortAddress(account)}
@@ -264,42 +265,42 @@ export function AdminConsole() {
       <div className="grid gap-5 bg-zinc-50 p-5 xl:grid-cols-2">
         <ActionCard
           accent="emerald"
-          detail="Create a new ERC-721 station identity with owner, capacity, and metadata."
-          eyebrow="Asset"
-          title="Register Station"
+          detail={t("admin.registerStationDetail")}
+          eyebrow={t("admin.asset")}
+          title={t("admin.registerStation")}
         >
           <form
             onSubmit={(event) => submit(event, () => stationMutation.mutate())}
           >
             <div className="grid gap-3 sm:grid-cols-2">
               <Field
-                label="Owner"
+                label={t("admin.owner")}
                 onChange={(owner) =>
                   setStation((value) => ({ ...value, owner }))
                 }
                 value={station.owner}
               />
               <Field
-                label="Name"
+                label={t("admin.name")}
                 onChange={(name) => setStation((value) => ({ ...value, name }))}
                 value={station.name}
               />
               <Field
-                label="Region"
+                label={t("admin.region")}
                 onChange={(region) =>
                   setStation((value) => ({ ...value, region }))
                 }
                 value={station.region}
               />
               <Field
-                label="Capacity kW"
+                label={t("admin.capacityKw")}
                 onChange={(capacityKw) =>
                   setStation((value) => ({ ...value, capacityKw }))
                 }
                 value={station.capacityKw}
               />
               <Field
-                label="Commissioned"
+                label={t("admin.commissioned")}
                 onChange={(commissionedAt) =>
                   setStation((value) => ({ ...value, commissionedAt }))
                 }
@@ -307,7 +308,7 @@ export function AdminConsole() {
                 value={station.commissionedAt}
               />
               <Field
-                label="Metadata URI"
+                label={t("admin.metadataUri")}
                 onChange={(metadataUri) =>
                   setStation((value) => ({ ...value, metadataUri }))
                 }
@@ -315,9 +316,9 @@ export function AdminConsole() {
               />
             </div>
             <div className="mt-4 flex items-center justify-between gap-3">
-              <p className="text-xs text-zinc-500">Mints a new station NFT.</p>
+              <p className="text-xs text-zinc-500">{t("admin.mintsStation")}</p>
               <PrimaryButton disabled={stationMutation.isPending}>
-                {stationMutation.isPending ? "Submitting" : "Register"}
+                {stationMutation.isPending ? t("admin.submitting") : t("admin.register")}
               </PrimaryButton>
             </div>
             <TxResult
@@ -329,23 +330,23 @@ export function AdminConsole() {
 
         <ActionCard
           accent="sky"
-          detail="Send native token revenue into the station vault and expose it to the indexed activity feed."
-          eyebrow="Revenue"
-          title="Deposit Revenue"
+          detail={t("admin.depositRevenueDetail")}
+          eyebrow={t("admin.revenue")}
+          title={t("admin.depositRevenue")}
         >
           <form
             onSubmit={(event) => submit(event, () => revenueMutation.mutate())}
           >
             <div className="grid gap-3 sm:grid-cols-2">
               <Field
-                label="Station ID"
+                label={t("admin.stationId")}
                 onChange={(stationId) =>
                   setRevenue((value) => ({ ...value, stationId }))
                 }
                 value={revenue.stationId}
               />
               <Field
-                label="Amount ETH"
+                label={t("admin.amountEth")}
                 onChange={(amountEth) =>
                   setRevenue((value) => ({ ...value, amountEth }))
                 }
@@ -353,9 +354,9 @@ export function AdminConsole() {
               />
             </div>
             <div className="mt-4 flex items-center justify-between gap-3">
-              <p className="text-xs text-zinc-500">Creates a payable vault tx.</p>
+              <p className="text-xs text-zinc-500">{t("admin.createsVaultTx")}</p>
               <PrimaryButton disabled={revenueMutation.isPending}>
-                {revenueMutation.isPending ? "Submitting" : "Deposit"}
+                {revenueMutation.isPending ? t("admin.submitting") : t("admin.deposit")}
               </PrimaryButton>
             </div>
             <TxResult
@@ -367,35 +368,35 @@ export function AdminConsole() {
 
         <ActionCard
           accent="lime"
-          detail="Mint carbon credits to an account with station evidence for later verification."
-          eyebrow="Carbon"
-          title="Mint Carbon Credits"
+          detail={t("admin.mintCarbonCreditsDetail")}
+          eyebrow={t("admin.carbon")}
+          title={t("admin.mintCarbonCredits")}
         >
           <form onSubmit={(event) => submit(event, () => carbonMutation.mutate())}>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field
-                label="Account"
+                label={t("wallet.account")}
                 onChange={(next) =>
                   setCarbon((value) => ({ ...value, account: next }))
                 }
                 value={carbon.account}
               />
               <Field
-                label="Station ID"
+                label={t("admin.stationId")}
                 onChange={(stationId) =>
                   setCarbon((value) => ({ ...value, stationId }))
                 }
                 value={carbon.stationId}
               />
               <Field
-                label="Amount SWC"
+                label={t("admin.amountSwc")}
                 onChange={(amount) =>
                   setCarbon((value) => ({ ...value, amount }))
                 }
                 value={carbon.amount}
               />
               <Field
-                label="Evidence URI"
+                label={t("admin.evidenceUri")}
                 onChange={(evidenceUri) =>
                   setCarbon((value) => ({ ...value, evidenceUri }))
                 }
@@ -403,9 +404,9 @@ export function AdminConsole() {
               />
             </div>
             <div className="mt-4 flex items-center justify-between gap-3">
-              <p className="text-xs text-zinc-500">Mints ERC-20 credits.</p>
+              <p className="text-xs text-zinc-500">{t("admin.mintsErc20")}</p>
               <PrimaryButton disabled={carbonMutation.isPending}>
-                {carbonMutation.isPending ? "Submitting" : "Mint"}
+                {carbonMutation.isPending ? t("admin.submitting") : t("admin.mint")}
               </PrimaryButton>
             </div>
             <TxResult
@@ -417,9 +418,9 @@ export function AdminConsole() {
 
         <ActionCard
           accent="amber"
-          detail="Issue a green certificate batch for a station period and recipient."
-          eyebrow="Certificates"
-          title="Issue Green Certificate"
+          detail={t("admin.issueGreenCertificateDetail")}
+          eyebrow={t("admin.certificates")}
+          title={t("admin.issueGreenCertificate")}
         >
           <form
             onSubmit={(event) =>
@@ -428,42 +429,42 @@ export function AdminConsole() {
           >
             <div className="grid gap-3 sm:grid-cols-2">
               <Field
-                label="Account"
+                label={t("wallet.account")}
                 onChange={(next) =>
                   setCertificate((value) => ({ ...value, account: next }))
                 }
                 value={certificate.account}
               />
               <Field
-                label="Station ID"
+                label={t("admin.stationId")}
                 onChange={(stationId) =>
                   setCertificate((value) => ({ ...value, stationId }))
                 }
                 value={certificate.stationId}
               />
               <Field
-                label="Amount"
+                label={t("admin.amount")}
                 onChange={(amount) =>
                   setCertificate((value) => ({ ...value, amount }))
                 }
                 value={certificate.amount}
               />
               <Field
-                label="Type"
+                label={t("admin.type")}
                 onChange={(certificateType) =>
                   setCertificate((value) => ({ ...value, certificateType }))
                 }
                 value={certificate.certificateType}
               />
               <Field
-                label="Period"
+                label={t("admin.period")}
                 onChange={(period) =>
                   setCertificate((value) => ({ ...value, period }))
                 }
                 value={certificate.period}
               />
               <Field
-                label="Evidence URI"
+                label={t("admin.evidenceUri")}
                 onChange={(evidenceUri) =>
                   setCertificate((value) => ({ ...value, evidenceUri }))
                 }
@@ -471,9 +472,9 @@ export function AdminConsole() {
               />
             </div>
             <div className="mt-4 flex items-center justify-between gap-3">
-              <p className="text-xs text-zinc-500">Issues ERC-1155 supply.</p>
+              <p className="text-xs text-zinc-500">{t("admin.issuesErc1155")}</p>
               <PrimaryButton disabled={certificateMutation.isPending}>
-                {certificateMutation.isPending ? "Submitting" : "Issue"}
+                {certificateMutation.isPending ? t("admin.submitting") : t("admin.issue")}
               </PrimaryButton>
             </div>
             <TxResult
@@ -485,36 +486,36 @@ export function AdminConsole() {
 
         <ActionCard
           accent="sky"
-          detail="Update database-side review state for operational workflows."
-          eyebrow="Review"
-          title="Review Station"
+          detail={t("admin.reviewStationDetail")}
+          eyebrow={t("admin.review")}
+          title={t("admin.reviewStation")}
         >
           <form onSubmit={(event) => submit(event, () => reviewMutation.mutate())}>
             <div className="grid gap-3 sm:grid-cols-3">
               <Field
-                label="Station ID"
+                label={t("admin.stationId")}
                 onChange={(stationId) =>
                   setReview((value) => ({ ...value, stationId }))
                 }
                 value={review.stationId}
               />
               <Field
-                label="Status"
+                label={t("common.status")}
                 onChange={(status) =>
                   setReview((value) => ({ ...value, status }))
                 }
                 value={review.status}
               />
               <Field
-                label="Note"
+                label={t("admin.note")}
                 onChange={(note) => setReview((value) => ({ ...value, note }))}
                 value={review.note}
               />
             </div>
             <div className="mt-4 flex items-center justify-between gap-3">
-              <p className="text-xs text-zinc-500">No chain tx required.</p>
+              <p className="text-xs text-zinc-500">{t("admin.noChainTx")}</p>
               <PrimaryButton disabled={reviewMutation.isPending}>
-                {reviewMutation.isPending ? "Saving" : "Save Review"}
+                {reviewMutation.isPending ? t("admin.saving") : t("admin.saveReview")}
               </PrimaryButton>
             </div>
             <TxResult error={reviewMutation.error} />
@@ -523,37 +524,37 @@ export function AdminConsole() {
 
         <ActionCard
           accent="emerald"
-          detail="Record live operating state such as normal, warning, utilization, and operator note."
-          eyebrow="Operations"
-          title="Update Operation Status"
+          detail={t("admin.updateOperationStatusDetail")}
+          eyebrow={t("admin.operations")}
+          title={t("admin.updateOperationStatus")}
         >
           <form
             onSubmit={(event) => submit(event, () => operationMutation.mutate())}
           >
             <div className="grid gap-3 sm:grid-cols-2">
               <Field
-                label="Station ID"
+                label={t("admin.stationId")}
                 onChange={(stationId) =>
                   setOperation((value) => ({ ...value, stationId }))
                 }
                 value={operation.stationId}
               />
               <Field
-                label="Status"
+                label={t("common.status")}
                 onChange={(status) =>
                   setOperation((value) => ({ ...value, status }))
                 }
                 value={operation.status}
               />
               <Field
-                label="Utilization"
+                label={t("admin.utilization")}
                 onChange={(utilization) =>
                   setOperation((value) => ({ ...value, utilization }))
                 }
                 value={operation.utilization}
               />
               <Field
-                label="Updated By"
+                label={t("admin.updatedBy")}
                 onChange={(updatedBy) =>
                   setOperation((value) => ({ ...value, updatedBy }))
                 }
@@ -561,7 +562,7 @@ export function AdminConsole() {
               />
               <div className="sm:col-span-2">
                 <Field
-                  label="Note"
+                  label={t("admin.note")}
                   onChange={(note) =>
                     setOperation((value) => ({ ...value, note }))
                   }
@@ -570,9 +571,9 @@ export function AdminConsole() {
               </div>
             </div>
             <div className="mt-4 flex items-center justify-between gap-3">
-              <p className="text-xs text-zinc-500">Refreshes station health.</p>
+              <p className="text-xs text-zinc-500">{t("admin.refreshesHealth")}</p>
               <PrimaryButton disabled={operationMutation.isPending}>
-                {operationMutation.isPending ? "Saving" : "Save Status"}
+                {operationMutation.isPending ? t("admin.saving") : t("admin.saveStatus")}
               </PrimaryButton>
             </div>
             <TxResult error={operationMutation.error} />

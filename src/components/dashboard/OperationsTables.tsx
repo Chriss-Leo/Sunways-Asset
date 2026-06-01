@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { formatEther } from "viem";
+import { useT } from "@/i18n";
 import {
   getAccountSummaries,
   getCarbonIssuances,
@@ -145,20 +146,21 @@ function StationBoard({
   operations: StationOperationStatus[];
   stations: Station[];
 }) {
+  const { t } = useT();
   const operationMap = new Map(
     operations.map((operation) => [operation.stationId, operation]),
   );
 
   return (
     <SectionShell
-      action={<StatusPill tone="emerald">{stations.length} indexed</StatusPill>}
-      eyebrow="Assets"
-      title="Power Station Portfolio"
+      action={<StatusPill tone="emerald">{t("operations.indexedPill", { count: stations.length })}</StatusPill>}
+      eyebrow={t("operations.assets")}
+      title={t("operations.powerStationPortfolio")}
     >
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,28rem),1fr))] gap-4 p-5">
         {stations.length === 0 ? (
           <div className="lg:col-span-2">
-            <EmptyState label="Waiting for indexed station assets" />
+            <EmptyState label={t("station.waitingForStations")} />
           </div>
         ) : null}
         {stations.map((station) => {
@@ -171,7 +173,7 @@ function StationBoard({
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="font-mono text-xs font-semibold text-zinc-500">
-                    Station #{station.stationId}
+                    {t("station.stationNumber", { id: station.stationId })}
                   </p>
                   <h3 className="mt-1 text-lg font-semibold text-zinc-950">
                     {station.name}
@@ -187,21 +189,21 @@ function StationBoard({
 
               <div className="mt-5 grid gap-3 sm:grid-cols-3">
                 <div className="rounded-md bg-zinc-50 p-3">
-                  <p className="text-xs font-medium text-zinc-500">Capacity</p>
+                  <p className="text-xs font-medium text-zinc-500">{t("station.capacity")}</p>
                   <p className="mt-1 text-sm font-semibold text-zinc-950">
-                    {Number(station.capacityKw).toLocaleString()} kW
+                    {Number(station.capacityKw).toLocaleString()} {t("station.kW")}
                   </p>
                 </div>
                 <div className="rounded-md bg-zinc-50 p-3">
                   <p className="text-xs font-medium text-zinc-500">
-                    Utilization
+                    {t("station.utilization")}
                   </p>
                   <p className="mt-1 text-sm font-semibold text-zinc-950">
-                    {operation?.utilization || "N/A"}
+                    {operation?.utilization || t("station.nA")}
                   </p>
                 </div>
                 <div className="rounded-md bg-zinc-50 p-3">
-                  <p className="text-xs font-medium text-zinc-500">Review</p>
+                  <p className="text-xs font-medium text-zinc-500">{t("station.review")}</p>
                   <p className="mt-1 text-sm font-semibold text-zinc-950">
                     {station.reviewStatus ?? "approved"}
                   </p>
@@ -268,11 +270,12 @@ function RecordPanel({
 }
 
 function AccountSummaryPanel({ items }: { items: UserAssetSummary[] }) {
+  const { t } = useT();
   return (
-    <SectionShell eyebrow="Accounts" title="User Asset Summary">
+    <SectionShell eyebrow={t("operations.accounts")} title={t("operations.userAssetSummary")}>
       <div className="grid gap-4 p-5">
         {items.length === 0 ? (
-          <EmptyState label="Waiting for indexed account balances" />
+          <EmptyState label={t("operations.waitingForBalances")} />
         ) : null}
         {items.map((item) => (
           <article
@@ -283,23 +286,23 @@ function AccountSummaryPanel({ items }: { items: UserAssetSummary[] }) {
               <p className="font-mono text-sm font-semibold text-zinc-950">
                 {shortAddress(item.account)}
               </p>
-              <StatusPill tone="sky">{item.stationCount} stations</StatusPill>
+              <StatusPill tone="sky">{t("operations.stations", { count: item.stationCount })}</StatusPill>
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <div className="rounded-md bg-zinc-50 p-3">
-                <p className="text-xs text-zinc-500">Revenue</p>
+                <p className="text-xs text-zinc-500">{t("operations.revenue")}</p>
                 <p className="mt-1 text-sm font-semibold text-zinc-950">
                   {formatWei(item.totalRevenueWei)}
                 </p>
               </div>
               <div className="rounded-md bg-zinc-50 p-3">
-                <p className="text-xs text-zinc-500">Carbon</p>
+                <p className="text-xs text-zinc-500">{t("operations.carbon")}</p>
                 <p className="mt-1 text-sm font-semibold text-zinc-950">
                   {formatToken(item.carbonCreditBalance, "SWC")}
                 </p>
               </div>
               <div className="rounded-md bg-zinc-50 p-3">
-                <p className="text-xs text-zinc-500">Certificates</p>
+                <p className="text-xs text-zinc-500">{t("operations.certificates")}</p>
                 <p className="mt-1 text-sm font-semibold text-zinc-950">
                   {Number(item.greenCertificateCount).toLocaleString()}
                 </p>
@@ -313,6 +316,7 @@ function AccountSummaryPanel({ items }: { items: UserAssetSummary[] }) {
 }
 
 export function OperationsTables() {
+  const { t } = useT();
   const stations = useQuery({
     queryKey: ["stations"],
     queryFn: getStations,
@@ -373,7 +377,7 @@ export function OperationsTables() {
       <RecordItem
         key={`deposit-${item.txHash}-${item.blockNumber}`}
         meta={`Station #${item.stationId} · ${shortAddress(item.beneficiary)}`}
-        title="Revenue deposited"
+        title={t("operations.revenueDeposited")}
         txHash={item.txHash}
         value={formatWei(item.amountWei)}
       />
@@ -382,7 +386,7 @@ export function OperationsTables() {
       <RecordItem
         key={`claim-${item.txHash}-${item.blockNumber}`}
         meta={shortAddress(item.account)}
-        title="Revenue claimed"
+        title={t("operations.revenueClaimed")}
         txHash={item.txHash}
         value={formatWei(item.amountWei)}
       />
@@ -394,7 +398,7 @@ export function OperationsTables() {
       <RecordItem
         key={`carbon-${item.txHash}-${item.blockNumber}`}
         meta={`Station #${item.stationId} · ${shortAddress(item.account)}`}
-        title="Carbon credits minted"
+        title={t("operations.carbonCreditsMinted")}
         txHash={item.txHash}
         value={formatToken(item.amount, "SWC")}
       />
@@ -403,7 +407,7 @@ export function OperationsTables() {
       <RecordItem
         key={`retire-${item.txHash}-${item.blockNumber}`}
         meta={`${item.reason} · ${shortAddress(item.account)}`}
-        title="Carbon credits retired"
+        title={t("operations.carbonCreditsRetired")}
         txHash={item.txHash}
         value={formatToken(item.amount, "SWC")}
       />
@@ -415,9 +419,9 @@ export function OperationsTables() {
       <RecordItem
         key={`certificate-${item.txHash}-${item.certificateId}`}
         meta={`${item.certificateType} · ${item.period}`}
-        title={`Certificate #${item.certificateId}`}
+        title={t("operations.certificateNumber", { id: item.certificateId })}
         txHash={item.txHash}
-        value={`${Number(item.amount).toLocaleString()} issued`}
+        value={t("operations.issued", { count: Number(item.amount).toLocaleString() })}
       />
     ),
   );
@@ -428,18 +432,18 @@ export function OperationsTables() {
     <section className="space-y-6">
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <IndexerCard
-          label="Latest Block"
+          label={t("operations.latestBlock")}
           tone="sky"
           value={status.data?.latestKnownBlock ?? 0}
         />
         <IndexerCard
-          label="Indexed Block"
+          label={t("operations.indexedBlock")}
           tone="emerald"
           value={status.data?.lastIndexedBlock ?? 0}
         />
-        <IndexerCard label="Lag" tone={lag > 0 ? "amber" : "emerald"} value={`${lag} blocks`} />
+        <IndexerCard label={t("operations.lag")} tone={lag > 0 ? "amber" : "emerald"} value={t("operations.blocks", { count: lag })} />
         <IndexerCard
-          label="Failures"
+          label={t("operations.failures")}
           tone={(status.data?.failureCount ?? 0) > 0 ? "red" : "emerald"}
           value={status.data?.failureCount ?? 0}
         />
@@ -452,23 +456,23 @@ export function OperationsTables() {
 
       <div className="grid gap-6 xl:grid-cols-2">
         <RecordPanel
-          emptyLabel="Waiting for revenue events"
-          eyebrow="Revenue"
-          title="Revenue Activity"
+          emptyLabel={t("operations.waitingForRevenue")}
+          eyebrow={t("operations.revenue")}
+          title={t("operations.revenueActivity")}
         >
           {revenueRecords}
         </RecordPanel>
         <RecordPanel
-          emptyLabel="Waiting for carbon events"
-          eyebrow="Carbon"
-          title="Carbon Activity"
+          emptyLabel={t("operations.waitingForCarbon")}
+          eyebrow={t("operations.carbon")}
+          title={t("operations.carbonActivity")}
         >
           {carbonRecords}
         </RecordPanel>
         <RecordPanel
-          emptyLabel="Waiting for certificate batches"
-          eyebrow="Certificates"
-          title="Green Certificate Batches"
+          emptyLabel={t("operations.waitingForCertificates")}
+          eyebrow={t("operations.certificates")}
+          title={t("operations.greenCertificateBatches")}
         >
           {certificateRecords}
         </RecordPanel>

@@ -2,6 +2,7 @@ import { ConnectButton } from "@rainbow-me/rainbowkit";
 import type { ReactNode } from "react";
 import { useAccount, useChainId } from "wagmi";
 import { useRequiredChain } from "@/hooks/useRequiredChain";
+import { useT } from "@/i18n";
 import { SignatureLogin } from "./SignatureLogin";
 
 /**
@@ -30,7 +31,7 @@ function StatusPill({
 
   return (
     <span
-      className={`inline-flex min-h-9 items-center rounded-full border px-3 text-sm font-medium ${toneClass}`}
+      className={`inline-flex min-h-9 items-center rounded-full border px-3 text-sm font-medium whitespace-nowrap ${toneClass}`}
     >
       {children}
     </span>
@@ -41,6 +42,7 @@ function StatusPill({
  * Wallet readiness panel for the local Anvil development flow.
  */
 export function WalletStatus() {
+  const { t } = useT();
   const { address, connector, isConnected } = useAccount();
   const chainId = useChainId();
   const {
@@ -56,39 +58,38 @@ export function WalletStatus() {
       <div className="border-b border-zinc-200 px-5 py-4">
         <div>
           <p className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-            Sunways Asset
+            {t("wallet.title")}
           </p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight text-zinc-950">
-            Energy Asset Operations
+            {t("wallet.heading")}
           </h1>
-          <p className="mt-3 max-w-2xl text-base leading-7 text-zinc-600">
-            Power station NFTs, revenue settlement, carbon credits, and green
-            certificates on the local development chain.
+          <p className="mt-3 text-base leading-7 text-zinc-600 min-h-[3.5rem]">
+            {t("wallet.description")}
           </p>
         </div>
       </div>
 
       <div className="grid gap-0 md:grid-cols-2 xl:grid-cols-4">
         <div className="border-b border-zinc-200 p-5 md:border-r xl:border-b-0">
-          <p className="text-sm text-zinc-500">Account</p>
+          <p className="text-sm text-zinc-500">{t("wallet.account")}</p>
           <p className="mt-2 break-all font-mono text-sm font-semibold text-zinc-950">
-            {address ? shortAddress(address) : "Not connected"}
+            {address ? shortAddress(address) : t("wallet.notConnected")}
           </p>
         </div>
         <div className="border-b border-zinc-200 p-5 xl:border-b-0 xl:border-r">
-          <p className="text-sm text-zinc-500">Connector</p>
+          <p className="text-sm text-zinc-500">{t("wallet.connector")}</p>
           <p className="mt-2 text-sm font-semibold text-zinc-950">
             {connector?.name ?? "None"}
           </p>
         </div>
         <div className="border-b border-zinc-200 p-5 md:border-r md:border-b-0">
-          <p className="text-sm text-zinc-500">Current Chain</p>
+          <p className="text-sm text-zinc-500">{t("wallet.currentChain")}</p>
           <p className="mt-2 font-mono text-sm font-semibold text-zinc-950">
             {chainId}
           </p>
         </div>
         <div className="p-5">
-          <p className="text-sm text-zinc-500">Required Chain</p>
+          <p className="text-sm text-zinc-500">{t("wallet.requiredChain")}</p>
           <p className="mt-2 text-sm font-semibold text-zinc-950">
             {requiredChain.name} ({requiredChain.id})
           </p>
@@ -99,22 +100,21 @@ export function WalletStatus() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-semibold text-zinc-950">
-                Step 1 · Connect Wallet
+              <p className="text-sm font-semibold text-zinc-950 whitespace-nowrap">
+                {t("wallet.step1")}
               </p>
               {isConnected ? (
                 isRequiredChain ? (
-                  <StatusPill tone="success">Ready on Anvil</StatusPill>
+                  <StatusPill tone="success">{t("wallet.readyOnAnvil")}</StatusPill>
                 ) : (
-                  <StatusPill tone="warning">Wrong network</StatusPill>
+                  <StatusPill tone="warning">{t("wallet.wrongNetwork")}</StatusPill>
                 )
               ) : (
-                <StatusPill>Wallet not connected</StatusPill>
+                <StatusPill>{t("wallet.walletNotConnected")}</StatusPill>
               )}
             </div>
-            <p className="mt-2 text-sm leading-6 text-zinc-600">
-              Use RainbowKit to select MetaMask, WalletConnect, or another
-              available wallet provider.
+            <p className="mt-2 text-sm leading-6 text-zinc-600 min-h-[2.5rem]">
+              {t("wallet.connectHint")}
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -126,7 +126,7 @@ export function WalletStatus() {
                 type="button"
                 onClick={switchToRequiredChain}
               >
-                {isSwitching ? "Switching..." : "Switch to Anvil"}
+                {isSwitching ? t("wallet.switching") : t("wallet.switchToAnvil")}
               </button>
             ) : null}
           </div>

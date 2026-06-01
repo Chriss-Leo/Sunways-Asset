@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAccount, useSignMessage } from "wagmi";
+import { useT } from "@/i18n";
 import {
   clearSessionToken,
   createNonce,
@@ -28,6 +29,7 @@ function formatExpiry(value: string) {
  * Performs nonce-based wallet login against the backend auth endpoints.
  */
 export function SignatureLogin({ canLogin }: SignatureLoginProps) {
+  const { t } = useT();
   const { address, isConnected } = useAccount();
   const { signMessageAsync } = useSignMessage();
   const [error, setError] = useState<string | null>(null);
@@ -70,7 +72,7 @@ export function SignatureLogin({ canLogin }: SignatureLoginProps) {
       });
     } catch (nextError) {
       setError(
-        nextError instanceof Error ? nextError.message : "Signature login failed",
+        nextError instanceof Error ? nextError.message : t("wallet.signatureLoginFailed"),
       );
     } finally {
       setIsLoading(false);
@@ -103,10 +105,10 @@ export function SignatureLogin({ canLogin }: SignatureLoginProps) {
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm font-semibold text-zinc-950">
-              Wallet Identity
+              {t("wallet.identity")}
             </p>
             <span
-              className={`inline-flex min-h-7 items-center rounded-full border px-2.5 text-xs font-semibold ${
+              className={`inline-flex min-h-7 items-center rounded-full border px-2.5 text-xs font-semibold whitespace-nowrap ${
                 isSignedIn
                   ? "border-emerald-200 bg-emerald-50 text-emerald-700"
                   : isConnected
@@ -115,29 +117,27 @@ export function SignatureLogin({ canLogin }: SignatureLoginProps) {
               }`}
             >
               {isSignedIn
-                ? "Signed in"
+                ? t("wallet.signedIn")
                 : isConnected
-                  ? "Signature required"
-                  : "Wallet required"}
+                  ? t("wallet.signatureRequired")
+                  : t("wallet.walletRequired")}
             </span>
           </div>
-          <p className="mt-2 text-sm leading-6 text-zinc-600">
-            Sign a backend nonce with the connected wallet to unlock
-            authenticated API access. This does not send a transaction or spend
-            gas.
+          <p className="mt-2 text-sm leading-6 text-zinc-600 min-h-[2.5rem]">
+            {t("wallet.identityDescription")}
           </p>
           {activeSession ? (
             <p className="mt-2 break-all text-xs text-zinc-500">
-              Session for{" "}
+              {t("wallet.sessionFor")}{" "}
               <span className="font-mono font-semibold text-zinc-950">
                 {shortAddress(activeSession.address)}
               </span>{" "}
-              expires {formatExpiry(activeSession.expiresAt)}
+              {t("wallet.expires")} {formatExpiry(activeSession.expiresAt)}
             </p>
           ) : null}
           {session && !isSameAddress ? (
             <p className="mt-2 text-sm text-amber-700">
-              Connected wallet differs from the active session.
+              {t("wallet.walletDiffers")}
             </p>
           ) : null}
         </div>
@@ -148,7 +148,7 @@ export function SignatureLogin({ canLogin }: SignatureLoginProps) {
             type="button"
             onClick={handleLogout}
           >
-            Logout
+            {t("wallet.logout")}
           </button>
         ) : (
           <button
@@ -157,7 +157,7 @@ export function SignatureLogin({ canLogin }: SignatureLoginProps) {
             type="button"
             onClick={handleLogin}
           >
-            {isLoading ? "Signing..." : "Sign in with wallet"}
+            {isLoading ? t("wallet.signing") : t("wallet.signInWithWallet")}
           </button>
         )}
       </div>

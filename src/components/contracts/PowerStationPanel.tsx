@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useChainId, useReadContract } from "wagmi";
 import { requiredChain } from "@/config/chains";
+import { useT } from "@/i18n";
 import { sunwaysContracts, sunwaysLocalDeployment } from "@/contracts/sunways";
 import { mockStation } from "@/data/mockDashboard";
 import { getStation } from "@/services/dashboard";
@@ -12,16 +13,16 @@ function shortAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
-function formatCapacity(value: bigint | number | undefined) {
+function formatCapacity(value: bigint | number | undefined, fallback: string) {
   if (value === undefined) {
-    return "N/A";
+    return fallback;
   }
   return `${value.toLocaleString()} kW`;
 }
 
-function formatTimestamp(value: bigint | string | undefined) {
+function formatTimestamp(value: bigint | string | undefined, fallback: string) {
   if (!value) {
-    return "N/A";
+    return fallback;
   }
   if (typeof value === "string") {
     return value;
@@ -29,18 +30,18 @@ function formatTimestamp(value: bigint | string | undefined) {
   return new Date(Number(value) * 1000).toLocaleDateString();
 }
 
-function statusLabel(value: number | undefined) {
+function statusLabel(value: number | undefined, t: (key: string) => string) {
   switch (value) {
     case 0:
-      return "Pending";
+      return t("station.pending");
     case 1:
-      return "Active";
+      return t("station.active");
     case 2:
-      return "Suspended";
+      return t("station.suspended");
     case 3:
-      return "Retired";
+      return t("station.retired");
     default:
-      return "N/A";
+      return t("station.nA");
   }
 }
 
@@ -77,6 +78,7 @@ function stationFields(data: unknown) {
 }
 
 export function PowerStationPanel() {
+  const { t } = useT();
   const backendStation = useQuery({
     queryKey: ["station", 1],
     queryFn: () => getStation(1),
@@ -122,26 +124,26 @@ export function PowerStationPanel() {
   const hasBackendStation = Boolean(backendStation.data);
   const displayStation = hasBackendStation
     ? {
-        name: backendStation.data?.name ?? "N/A",
-        region: backendStation.data?.region ?? "N/A",
+        name: backendStation.data?.name ?? t("station.nA"),
+        region: backendStation.data?.region ?? t("station.nA"),
         owner: backendStation.data?.owner ?? mockStation.owner,
         capacityKw: Number(backendStation.data?.capacityKw ?? 0),
         commissionedAt:
           backendStation.data?.commissionedAt?.slice(0, 10) ??
           mockStation.commissionedAt,
-        status: backendStation.data?.status ?? "N/A",
-        source: "Backend",
+        status: backendStation.data?.status ?? t("station.nA"),
+        source: t("portfolio.backend"),
       }
     : hasFirstStation
       ? {
-          name: station?.name ?? "N/A",
-          region: station?.region ?? "N/A",
+          name: station?.name ?? t("station.nA"),
+          region: station?.region ?? t("station.nA"),
         owner:
           typeof ownerQuery.data === "string" ? ownerQuery.data : mockStation.owner,
         capacityKw: station?.capacityKw,
         commissionedAt: station?.commissionedAt,
-          status: statusLabel(station?.status),
-          source: "On-chain",
+          status: statusLabel(station?.status, t),
+          source: t("portfolio.onChain"),
         }
       : {
           name: mockStation.name,
@@ -150,7 +152,7 @@ export function PowerStationPanel() {
           capacityKw: mockStation.capacityKw,
           commissionedAt: mockStation.commissionedAt,
           status: mockStation.status,
-          source: "Mock",
+          source: t("portfolio.mock"),
         };
   const isLiveData = hasBackendStation || hasFirstStation;
 
@@ -159,13 +161,13 @@ export function PowerStationPanel() {
       <div className="flex flex-col gap-4 border-b border-zinc-200 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-            Station Asset
+            {t("station.asset")}
           </p>
           <h2 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950">
             {displayStation.name}
           </h2>
           <p className="mt-2 text-sm leading-6 text-zinc-600">
-            {displayStation.region} · {formatCapacity(displayStation.capacityKw)}
+            {displayStation.region} · {formatCapacity(displayStation.capacityKw, t("station.nA"))}
           </p>
         </div>
         <span
@@ -183,37 +185,37 @@ export function PowerStationPanel() {
         <div className="border-b border-zinc-200 p-5 lg:border-b-0 lg:border-r">
           <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2 xl:grid-cols-3">
             <div>
-              <p className="text-sm text-zinc-500">Station ID</p>
+              <p className="text-sm text-zinc-500">{t("station.stationId")}</p>
               <p className="mt-1 font-mono text-sm font-semibold text-zinc-950">
                 #{firstStationId.toString()}
               </p>
             </div>
             <div>
-              <p className="text-sm text-zinc-500">Owner</p>
+              <p className="text-sm text-zinc-500">{t("station.owner")}</p>
               <p className="mt-1 font-mono text-sm font-semibold text-zinc-950">
                 {shortAddress(displayStation.owner)}
               </p>
             </div>
             <div>
-              <p className="text-sm text-zinc-500">Status</p>
+              <p className="text-sm text-zinc-500">{t("station.status")}</p>
               <p className="mt-1 text-sm font-semibold text-zinc-950">
                 {displayStation.status}
               </p>
             </div>
             <div>
-              <p className="text-sm text-zinc-500">Commissioned</p>
+              <p className="text-sm text-zinc-500">{t("station.commissioned")}</p>
               <p className="mt-1 text-sm font-semibold text-zinc-950">
-                {formatTimestamp(displayStation.commissionedAt)}
+                {formatTimestamp(displayStation.commissionedAt, t("station.nA"))}
               </p>
             </div>
             <div>
-              <p className="text-sm text-zinc-500">Monthly Revenue</p>
+              <p className="text-sm text-zinc-500">{t("station.monthlyRevenue")}</p>
               <p className="mt-1 text-sm font-semibold text-zinc-950">
                 {mockStation.monthlyRevenueEth} ETH
               </p>
             </div>
             <div>
-              <p className="text-sm text-zinc-500">Utilization</p>
+              <p className="text-sm text-zinc-500">{t("station.utilization")}</p>
               <p className="mt-1 text-sm font-semibold text-zinc-950">
                 {mockStation.utilization}
               </p>
@@ -224,25 +226,25 @@ export function PowerStationPanel() {
         <div className="p-5">
           <dl className="space-y-4">
             <div className="flex items-center justify-between gap-4">
-              <dt className="text-sm text-zinc-500">NFT Contract</dt>
+              <dt className="text-sm text-zinc-500">{t("station.nftContract")}</dt>
               <dd className="font-mono text-sm font-semibold text-zinc-950">
                 {shortAddress(powerStation.address)}
               </dd>
             </div>
             <div className="flex items-center justify-between gap-4">
-              <dt className="text-sm text-zinc-500">Contract Name</dt>
+              <dt className="text-sm text-zinc-500">{t("station.contractName")}</dt>
               <dd className="text-sm font-semibold text-zinc-950">
-                {typeof nameQuery.data === "string" ? nameQuery.data : "N/A"}
+                {typeof nameQuery.data === "string" ? nameQuery.data : t("station.nA")}
               </dd>
             </div>
             <div className="flex items-center justify-between gap-4">
-              <dt className="text-sm text-zinc-500">Symbol</dt>
+              <dt className="text-sm text-zinc-500">{t("station.symbol")}</dt>
               <dd className="font-mono text-sm font-semibold text-zinc-950">
-                {typeof symbolQuery.data === "string" ? symbolQuery.data : "N/A"}
+                {typeof symbolQuery.data === "string" ? symbolQuery.data : t("station.nA")}
               </dd>
             </div>
             <div className="flex items-center justify-between gap-4">
-              <dt className="text-sm text-zinc-500">Network</dt>
+              <dt className="text-sm text-zinc-500">{t("station.network")}</dt>
               <dd className="text-sm font-semibold text-zinc-950">
                 {sunwaysLocalDeployment.name}
               </dd>
@@ -250,12 +252,12 @@ export function PowerStationPanel() {
           </dl>
           {!isLocalChain ? (
             <p className="mt-5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              Switch to Anvil Local to read live contract state.
+              {t("station.switchToAnvil")}
             </p>
           ) : null}
           {isLocalChain && !isLiveData ? (
             <p className="mt-5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              Backend and chain data are not available yet, so the station card is using demo values.
+              {t("station.demoData")}
             </p>
           ) : null}
         </div>

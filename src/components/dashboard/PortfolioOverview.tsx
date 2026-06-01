@@ -2,6 +2,7 @@ import { formatEther } from "viem";
 import { useQuery } from "@tanstack/react-query";
 import { useChainId, useReadContract } from "wagmi";
 import { requiredChain } from "@/config/chains";
+import { useT } from "@/i18n";
 import {
   carbonCreditTokenAbi,
   greenCertificateAbi,
@@ -65,6 +66,7 @@ const toneClass = {
 } as const;
 
 export function PortfolioOverview() {
+  const { t } = useT();
   const summaryQuery = useQuery({
     queryKey: ["dashboard-summary"],
     queryFn: getDashboardSummary,
@@ -118,10 +120,10 @@ export function PortfolioOverview() {
           : portfolioMetrics[0].value,
       source:
         summaryQuery.data && summaryQuery.data.stations > 0
-          ? "Backend"
+          ? t("portfolio.backend")
           : typeof ownerQuery.data === "string"
-            ? "On-chain"
-            : "Mock",
+            ? t("portfolio.onChain")
+            : t("portfolio.mock"),
     },
     {
       ...portfolioMetrics[1],
@@ -131,10 +133,10 @@ export function PortfolioOverview() {
         portfolioMetrics[1].value,
       source:
         hasNonZero(summaryQuery.data?.totalRevenueWei)
-          ? "Backend"
+          ? t("portfolio.backend")
           : typeof revenueQuery.data === "bigint"
-            ? "On-chain"
-            : "Mock",
+            ? t("portfolio.onChain")
+            : t("portfolio.mock"),
     },
     {
       ...portfolioMetrics[2],
@@ -144,10 +146,10 @@ export function PortfolioOverview() {
         portfolioMetrics[2].value,
       source:
         hasNonZero(summaryQuery.data?.totalCarbonAmount)
-          ? "Backend"
+          ? t("portfolio.backend")
           : typeof carbonQuery.data === "bigint"
-            ? "On-chain"
-            : "Mock",
+            ? t("portfolio.onChain")
+            : t("portfolio.mock"),
     },
     {
       ...portfolioMetrics[3],
@@ -157,10 +159,10 @@ export function PortfolioOverview() {
           : formatCount(certificateQuery.data) ?? portfolioMetrics[3].value,
       source:
         hasNonZero(summaryQuery.data?.totalCertificates)
-          ? "Backend"
+          ? t("portfolio.backend")
           : typeof certificateQuery.data === "bigint"
-            ? "On-chain"
-            : "Mock",
+            ? t("portfolio.onChain")
+            : t("portfolio.mock"),
     },
   ];
 
@@ -183,7 +185,7 @@ export function PortfolioOverview() {
             <p className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950">
               {metric.value}
             </p>
-            <p className="mt-2 text-sm leading-6 text-zinc-600">
+            <p className="mt-2 text-sm leading-6 text-zinc-600 min-h-[2.5rem]">
               {metric.detail}
             </p>
           </article>
@@ -194,14 +196,14 @@ export function PortfolioOverview() {
         <div className="flex flex-col gap-2 border-b border-zinc-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-              Deployment
+              {t("portfolio.deployment")}
             </p>
             <h2 className="mt-1 text-xl font-semibold text-zinc-950">
-              Local Contract Map
+              {t("portfolio.localContractMap")}
             </h2>
           </div>
           <span className="inline-flex min-h-8 items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 text-sm font-medium text-emerald-700">
-            Anvil 31337
+            {t("portfolio.anvilChain")}
           </span>
         </div>
 
@@ -209,10 +211,10 @@ export function PortfolioOverview() {
           <table className="min-w-full divide-y divide-zinc-200 text-left text-sm">
             <thead className="bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500">
               <tr>
-                <th className="px-5 py-3 font-semibold">Contract</th>
-                <th className="px-5 py-3 font-semibold">Purpose</th>
-                <th className="px-5 py-3 font-semibold">Standard</th>
-                <th className="px-5 py-3 font-semibold">Address</th>
+                <th className="px-5 py-3 font-semibold">{t("portfolio.contract")}</th>
+                <th className="px-5 py-3 font-semibold">{t("portfolio.purpose")}</th>
+                <th className="px-5 py-3 font-semibold">{t("portfolio.standard")}</th>
+                <th className="px-5 py-3 font-semibold">{t("portfolio.address")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100">

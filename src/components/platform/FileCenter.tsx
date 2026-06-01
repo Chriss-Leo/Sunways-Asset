@@ -1,5 +1,6 @@
 import { type ChangeEvent, type DragEvent, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useT } from "@/i18n";
 import {
   generateAssetMetadata,
   getAssetDrafts,
@@ -33,6 +34,7 @@ function shortCid(cid: string): string {
 }
 
 export function FileCenter() {
+  const { t } = useT();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedDraftId, setSelectedDraftId] = useState<number>(0);
@@ -62,15 +64,15 @@ export function FileCenter() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["platform-files"] });
-      setUploadNote("Upload successful");
+      setUploadNote(t("platform.fileCenter.uploadSuccess"));
     },
     onError: (err: Error) => {
-      setUploadNote(`Upload failed: ${err.message}`);
+      setUploadNote(t("platform.fileCenter.uploadFailed", { message: err.message }));
     },
   });
 
   const handleFile = (file: File) => {
-    setUploadNote(`Uploading ${file.name} (${formatSize(file.size)})...`);
+    setUploadNote(`${t("platform.fileCenter.uploading")} ${file.name} (${formatSize(file.size)})...`);
     uploadMutation.mutate(file);
   };
 
@@ -103,12 +105,12 @@ export function FileCenter() {
     mutationFn: (draftId: number) => generateAssetMetadata(draftId),
     onSuccess: (data) => {
       setUploadNote(
-        `Metadata generated: ${data.metadataUri || "local only"}`,
+        t("platform.fileCenter.metadataGenerated", { uri: data.metadataUri || "local only" }),
       );
       queryClient.invalidateQueries({ queryKey: ["platform-assets"] });
     },
     onError: (err: Error) => {
-      setUploadNote(`Metadata error: ${err.message}`);
+      setUploadNote(t("platform.fileCenter.metadataError", { message: err.message }));
     },
   });
 
@@ -117,7 +119,7 @@ export function FileCenter() {
       <div className="flex flex-wrap items-center gap-4">
         <div>
           <label className="block text-xs font-semibold uppercase text-zinc-500">
-            Asset Draft
+            {t("platform.fileCenter.assetDraft")}
           </label>
           <select
             className="mt-1 h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-950"
@@ -126,7 +128,7 @@ export function FileCenter() {
             }
             value={selectedDraftId}
           >
-            <option value={0}>All drafts</option>
+            <option value={0}>{t("platform.fileCenter.allDrafts")}</option>
             {(drafts?.items ?? []).map((draft) => (
               <option key={draft.id} value={draft.id}>
                 #{draft.id} {draft.name}
@@ -136,14 +138,14 @@ export function FileCenter() {
         </div>
         <div>
           <label className="block text-xs font-semibold uppercase text-zinc-500">
-            Category
+            {t("platform.fileCenter.category")}
           </label>
           <select
             className="mt-1 h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-950"
             onChange={(event) => setSelectedCategory(event.target.value)}
             value={selectedCategory}
           >
-            <option value="">All categories</option>
+            <option value="">{t("platform.fileCenter.allCategories")}</option>
             {FILE_CATEGORIES.map((cat) => (
               <option key={cat.value} value={cat.value}>
                 {cat.label}
@@ -158,7 +160,7 @@ export function FileCenter() {
             onClick={() => metadataMutation.mutate(selectedDraftId)}
             type="button"
           >
-            {metadataMutation.isPending ? "Generating..." : "Generate Metadata"}
+            {metadataMutation.isPending ? t("platform.fileCenter.generating") : t("platform.fileCenter.generateMetadata")}
           </button>
         ) : null}
       </div>
@@ -183,13 +185,13 @@ export function FileCenter() {
         />
         <p className="text-sm font-medium text-zinc-600">
           {uploadMutation.isPending
-            ? `Uploading...`
-            : `Drop a file here or click to upload${
-                selectedDraftId ? ` for draft #${selectedDraftId}` : ""
+            ? t("platform.fileCenter.uploading")
+            : `${t("platform.fileCenter.dropHere")}${
+                selectedDraftId ? t("platform.fileCenter.forDraft", { id: selectedDraftId }) : ""
               }`}
         </p>
         <p className="mt-1 text-xs text-zinc-400">
-          Files are pinned to IPFS via Filebase
+          {t("platform.fileCenter.ipfsNote")}
         </p>
         {uploadNote ? (
           <p className="mt-3 text-sm font-medium text-zinc-700">
@@ -202,27 +204,27 @@ export function FileCenter() {
         <table className="w-full min-w-[640px] text-left text-sm">
           <thead className="border-b border-zinc-200 text-xs uppercase text-zinc-500">
             <tr>
-              <th className="px-4 py-3">File</th>
-              <th className="px-4 py-3">Category</th>
-              <th className="px-4 py-3">Draft</th>
-              <th className="px-4 py-3">Size</th>
-              <th className="px-4 py-3">CID</th>
-              <th className="px-4 py-3">Uploaded</th>
+              <th className="px-4 py-3">{t("platform.fileCenter.file")}</th>
+              <th className="px-4 py-3">{t("platform.fileCenter.category")}</th>
+              <th className="px-4 py-3">{t("platform.fileCenter.draft")}</th>
+              <th className="px-4 py-3">{t("platform.fileCenter.size")}</th>
+              <th className="px-4 py-3">{t("platform.fileCenter.cid")}</th>
+              <th className="px-4 py-3">{t("platform.fileCenter.uploaded")}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-100">
             {filesLoading ? (
               <tr>
                 <td className="px-4 py-6 text-center text-zinc-400" colSpan={6}>
-                  Loading files...
+                  {t("platform.fileCenter.loadingFiles")}
                 </td>
               </tr>
             ) : filteredFiles.length === 0 ? (
               <tr>
                 <td className="px-4 py-6 text-center text-zinc-400" colSpan={6}>
                   {selectedDraftId
-                    ? "No files for this draft. Upload one above."
-                    : "No files yet. Select a draft and upload a file."}
+                    ? t("platform.fileCenter.noFilesDraft")
+                    : t("platform.fileCenter.noFiles")}
                 </td>
               </tr>
             ) : (

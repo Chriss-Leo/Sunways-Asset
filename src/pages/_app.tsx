@@ -3,9 +3,11 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { RainbowKitProvider } from "@rainbow-me/rainbowkit";
 import "@rainbow-me/rainbowkit/styles.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 import { useState } from "react";
 import { WagmiProvider } from "wagmi";
 import { wagmiConfig } from "@/config/wagmi";
+import { LocaleProvider, useT } from "@/i18n";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -18,23 +20,30 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-/**
- * Global Pages Router app shell that wires wallet, query, and font providers once.
- */
+function RainbowKitShell({ children }: { children: ReactNode }) {
+  const { locale } = useT();
+  return (
+    <RainbowKitProvider key={locale} locale={locale === "zh" ? "zh-CN" : "en"}>
+      {children}
+    </RainbowKitProvider>
+  );
+}
+
 export default function App({ Component, pageProps }: AppProps) {
-  // Create one QueryClient per browser session so React Query cache survives route changes.
   const [queryClient] = useState(() => new QueryClient());
 
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider>
-          <div
-            className={`${geistSans.variable} ${geistMono.variable} flex min-h-screen flex-col antialiased`}
-          >
-            <Component {...pageProps} />
-          </div>
-        </RainbowKitProvider>
+        <LocaleProvider>
+          <RainbowKitShell>
+            <div
+              className={`${geistSans.variable} ${geistMono.variable} flex min-h-screen flex-col antialiased`}
+            >
+              <Component {...pageProps} />
+            </div>
+          </RainbowKitShell>
+        </LocaleProvider>
       </QueryClientProvider>
     </WagmiProvider>
   );

@@ -2,6 +2,7 @@ import type { FormEvent, ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAccount } from "wagmi";
+import { useT } from "@/i18n";
 import {
   checkAssetIssuanceReady,
   createAssetDraft,
@@ -158,6 +159,7 @@ function statusBadge(status: string) {
 }
 
 export function PlatformWorkspace() {
+  const { t } = useT();
   const { address } = useAccount();
   const account: string = address ?? fallbackAccount;
   const queryClient = useQueryClient();
@@ -326,23 +328,23 @@ export function PlatformWorkspace() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase text-zinc-500">
-              Platform Buildout
+              {t("platform.buildout")}
             </p>
             <h2 className="mt-1 text-2xl font-semibold text-zinc-950">
-              Asset onboarding workspace
+              {t("platform.onboardingWorkspace")}
             </h2>
           </div>
           <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-            <Metric label="Organizations" value={summary.organizations} />
-            <Metric label="Drafts" value={summary.drafts} />
-            <Metric label="Submitted" value={summary.submitted} />
-            <Metric label="Approved" value={summary.approved} />
+            <Metric label={t("platform.organizations")} value={summary.organizations} />
+            <Metric label={t("platform.drafts")} value={summary.drafts} />
+            <Metric label={t("platform.submitted")} value={summary.submitted} />
+            <Metric label={t("platform.approved")} value={summary.approved} />
           </div>
         </div>
       </div>
 
       <div className="grid gap-5 xl:grid-cols-3">
-        <Panel title="Create Organization">
+        <Panel title={t("platform.createOrganization")}>
           <form
             className="space-y-3"
             onSubmit={(event) =>
@@ -350,148 +352,148 @@ export function PlatformWorkspace() {
             }
           >
             <Field
-              label="Name"
+              label={t("admin.name")}
               onChange={(name) =>
                 setOrganization((value) => ({ ...value, name }))
               }
               value={organization.name}
             />
             <Field
-              label="Type"
+              label={t("admin.type")}
               onChange={(type) =>
                 setOrganization((value) => ({ ...value, type }))
               }
               value={organization.type}
             />
             <Field
-              label="Registration No"
+              label={t("platform.registrationNo")}
               onChange={(registrationNo) =>
                 setOrganization((value) => ({ ...value, registrationNo }))
               }
               value={organization.registrationNo}
             />
             <Field
-              label="Wallet"
+              label={t("platform.wallet")}
               onChange={(walletAddress) =>
                 setOrganization((value) => ({ ...value, walletAddress }))
               }
               value={organization.walletAddress}
             />
             <ActionButton disabled={organizationMutation.isPending}>
-              {organizationMutation.isPending ? "Creating" : "Create"}
+              {organizationMutation.isPending ? t("platform.creating") : t("platform.create")}
             </ActionButton>
             <StatusMessage
               error={organizationMutation.error}
               success={
                 organizationMutation.data
-                  ? `Created #${organizationMutation.data.id}`
+                  ? t("platform.created", { id: organizationMutation.data.id })
                   : undefined
               }
             />
           </form>
         </Panel>
 
-        <Panel title="Create Asset Draft">
+        <Panel title={t("platform.createAssetDraft")}>
           <form
             className="space-y-3"
             onSubmit={(event) => submit(event, () => assetMutation.mutate())}
           >
             <Field
-              label="Organization ID"
+              label={t("platform.organizationId")}
               onChange={(organizationId) =>
                 setAsset((value) => ({ ...value, organizationId }))
               }
               value={asset.organizationId}
             />
             <Field
-              label="Asset Name"
+              label={t("platform.assetName")}
               onChange={(name) => setAsset((value) => ({ ...value, name }))}
               value={asset.name}
             />
             <Field
-              label="Asset Type"
+              label={t("platform.assetType")}
               onChange={(assetType) =>
                 setAsset((value) => ({ ...value, assetType }))
               }
               value={asset.assetType}
             />
             <Field
-              label="Region"
+              label={t("admin.region")}
               onChange={(region) => setAsset((value) => ({ ...value, region }))}
               value={asset.region}
             />
             <Field
-              label="Capacity kW"
+              label={t("admin.capacityKw")}
               onChange={(capacityKw) =>
                 setAsset((value) => ({ ...value, capacityKw }))
               }
               value={asset.capacityKw}
             />
             <TextArea
-              label="Description"
+              label={t("platform.description")}
               onChange={(description) =>
                 setAsset((value) => ({ ...value, description }))
               }
               value={asset.description}
             />
             <ActionButton disabled={assetMutation.isPending}>
-              {assetMutation.isPending ? "Saving" : "Save Draft"}
+              {assetMutation.isPending ? t("admin.saving") : t("platform.saveDraft")}
             </ActionButton>
             <StatusMessage
               error={assetMutation.error}
               success={
-                assetMutation.data ? `Draft #${assetMutation.data.id}` : undefined
+                assetMutation.data ? t("platform.draft", { id: assetMutation.data.id }) : undefined
               }
             />
           </form>
         </Panel>
 
-        <Panel title="Register IPFS File">
+        <Panel title={t("platform.registerIpfsFile")}>
           <form
             className="space-y-3"
             onSubmit={(event) => submit(event, () => fileMutation.mutate())}
           >
             <Field
-              label="Asset Draft ID"
+              label={t("platform.assetDraftId")}
               onChange={(assetDraftId) =>
                 setFile((value) => ({ ...value, assetDraftId }))
               }
               value={file.assetDraftId}
             />
             <Field
-              label="Category"
+              label={t("platform.category")}
               onChange={(category) =>
                 setFile((value) => ({ ...value, category }))
               }
               value={file.category}
             />
             <Field
-              label="Original Name"
+              label={t("platform.originalName")}
               onChange={(originalName) =>
                 setFile((value) => ({ ...value, originalName }))
               }
               value={file.originalName}
             />
             <Field
-              label="CID"
+              label={t("platform.cid")}
               onChange={(cid) => setFile((value) => ({ ...value, cid }))}
               placeholder="Qm... or bafy..."
               value={file.cid}
             />
             <Field
-              label="Gateway URL"
+              label={t("platform.gatewayUrl")}
               onChange={(gatewayUrl) =>
                 setFile((value) => ({ ...value, gatewayUrl }))
               }
               value={file.gatewayUrl}
             />
             <ActionButton disabled={fileMutation.isPending}>
-              {fileMutation.isPending ? "Saving" : "Save File"}
+              {fileMutation.isPending ? t("admin.saving") : t("platform.saveFile")}
             </ActionButton>
             <StatusMessage
               error={fileMutation.error}
               success={
-                fileMutation.data ? `File #${fileMutation.data.id}` : undefined
+                fileMutation.data ? t("platform.file", { id: fileMutation.data.id }) : undefined
               }
             />
           </form>
@@ -499,10 +501,10 @@ export function PlatformWorkspace() {
       </div>
 
       {checkResult ? (
-        <Panel title={`Pre-Issuance Check — Asset #${checkResult.id}`}>
+        <Panel title={t("platform.preIssuanceCheck", { id: checkResult.id })}>
           <div className="space-y-3">
             <p className="text-sm">
-              <span className="font-semibold">Overall:</span>{" "}
+              <span className="font-semibold">{t("platform.overall")}</span>{" "}
               <span
                 className={
                   checkResult.ready
@@ -510,7 +512,7 @@ export function PlatformWorkspace() {
                     : "font-semibold text-red-700"
                 }
               >
-                {checkResult.ready ? "READY for issuance" : "NOT READY"}
+                {checkResult.ready ? t("platform.readyForIssuance") : t("platform.notReady")}
               </span>
             </p>
             <div className="space-y-2">
@@ -538,18 +540,18 @@ export function PlatformWorkspace() {
       ) : null}
 
       <div className="grid gap-5 xl:grid-cols-[1.4fr_0.6fr]">
-        <Panel title="Asset Review Queue">
+        <Panel title={t("platform.assetReviewQueue")}>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[820px] text-left text-sm">
               <thead className="border-b border-zinc-200 text-xs uppercase text-zinc-500">
                 <tr>
-                  <th className="py-3 pr-3">ID</th>
-                  <th className="py-3 pr-3">Asset</th>
-                  <th className="py-3 pr-3">Type</th>
-                  <th className="py-3 pr-3">Region</th>
-                  <th className="py-3 pr-3">Capacity</th>
-                  <th className="py-3 pr-3">Status</th>
-                  <th className="py-3 pr-3">Actions</th>
+                  <th className="py-3 pr-3">{t("platform.id")}</th>
+                  <th className="py-3 pr-3">{t("platform.asset")}</th>
+                  <th className="py-3 pr-3">{t("platform.type")}</th>
+                  <th className="py-3 pr-3">{t("platform.region")}</th>
+                  <th className="py-3 pr-3">{t("platform.capacity")}</th>
+                  <th className="py-3 pr-3">{t("common.status")}</th>
+                  <th className="py-3 pr-3">{t("platform.actions")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100">
@@ -575,7 +577,7 @@ export function PlatformWorkspace() {
                             onClick={() => submitMutation.mutate(item.id)}
                             type="button"
                           >
-                            Submit
+                            {t("platform.submit")}
                           </button>
                         ) : null}
                         {item.status === "submitted" || item.status === "metadata_ready" ? (
@@ -584,7 +586,7 @@ export function PlatformWorkspace() {
                             onClick={() => approveMutation.mutate(item.id)}
                             type="button"
                           >
-                            Approve
+                            {t("platform.approve")}
                           </button>
                         ) : null}
                         {item.status === "submitted" || item.status === "metadata_ready" ? (
@@ -593,7 +595,7 @@ export function PlatformWorkspace() {
                             onClick={() => rejectMutation.mutate(item.id)}
                             type="button"
                           >
-                            Reject
+                            {t("platform.reject")}
                           </button>
                         ) : null}
                         {item.status === "approved" ? (
@@ -603,8 +605,8 @@ export function PlatformWorkspace() {
                             type="button"
                           >
                             {metadataMutation.isPending && metadataMutation.variables === item.id
-                              ? "Generating..."
-                              : "Metadata"}
+                              ? t("platform.generating")
+                              : t("platform.metadata")}
                           </button>
                         ) : null}
                         {item.status === "approved" || item.status === "metadata_ready" ? (
@@ -613,7 +615,7 @@ export function PlatformWorkspace() {
                             onClick={() => checkMutation.mutate(item.id)}
                             type="button"
                           >
-                            Check
+                            {t("platform.check")}
                           </button>
                         ) : null}
                       </div>
@@ -625,16 +627,16 @@ export function PlatformWorkspace() {
           </div>
           {assets.data?.items.length === 0 ? (
             <p className="py-8 text-center text-sm text-zinc-500">
-              No asset drafts yet.
+              {t("platform.noAssetDrafts")}
             </p>
           ) : null}
         </Panel>
 
-        <Panel title="Recent Files & Audit">
+        <Panel title={t("platform.recentFilesAudit")}>
           <div className="space-y-5">
             <div>
               <p className="text-xs font-semibold uppercase text-zinc-500">
-                Files
+                {t("platform.files")}
               </p>
               <div className="mt-2 space-y-2">
                 {(files.data?.items ?? []).slice(0, 5).map((item) => (
@@ -654,7 +656,7 @@ export function PlatformWorkspace() {
             </div>
             <div>
               <p className="text-xs font-semibold uppercase text-zinc-500">
-                Audit
+                {t("platform.audit")}
               </p>
               <div className="mt-2 space-y-2">
                 {(auditLogs.data?.items ?? []).slice(0, 5).map((item) => (

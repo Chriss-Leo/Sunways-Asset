@@ -1,37 +1,77 @@
 import Head from "next/head";
-import { PowerStationPanel } from "@/components/contracts/PowerStationPanel";
-import { AdminConsole } from "@/components/dashboard/AdminConsole";
-import { OperationsTables } from "@/components/dashboard/OperationsTables";
+import { useQuery } from "@tanstack/react-query";
+import { useT } from "@/i18n";
 import { PortfolioOverview } from "@/components/dashboard/PortfolioOverview";
-import { FileCenter } from "@/components/platform/FileCenter";
-import { PlatformWorkspace } from "@/components/platform/PlatformWorkspace";
-import { LanguageSwitcher } from "@/components/LanguageSwitcher";
-import { WalletStatus } from "@/components/wallet/WalletStatus";
+import { getIndexerStatus } from "@/services/dashboard";
 
-export default function Home() {
+function IndexerCard({
+  label,
+  tone,
+  value,
+}: {
+  label: string;
+  tone: "emerald" | "amber" | "red" | "sky";
+  value: string | number;
+}) {
+  const accents = {
+    amber: "border-l-amber-400",
+    emerald: "border-l-emerald-500",
+    red: "border-l-red-500",
+    sky: "border-l-sky-500",
+  };
+
+  return (
+    <article
+      className={`rounded-lg border border-zinc-200 border-l-4 bg-white p-5 shadow-sm ${accents[tone]}`}
+    >
+      <p className="text-sm font-medium text-zinc-500">{label}</p>
+      <p className="mt-2 text-2xl font-semibold text-zinc-950">{value}</p>
+    </article>
+  );
+}
+
+export default function DashboardPage() {
+  const { t } = useT();
+
+  const status = useQuery({
+    queryKey: ["indexer-status"],
+    queryFn: getIndexerStatus,
+    retry: false,
+    refetchInterval: 5_000,
+  });
+
+  const lag = status.data?.lagBlocks ?? 0;
+
   return (
     <>
       <Head>
-        <title>Sunways Asset Console</title>
-        <meta
-          name="description"
-          content="Wallet connection console for Sunways Web3 energy assets"
-        />
+        <title>{t("nav.dashboard")} — Sunways Asset</title>
       </Head>
-      <main className="flex min-h-screen flex-1 bg-[#f4f7f3] px-4 py-6 font-sans text-zinc-950 sm:px-6 lg:px-8">
-        <section className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-          <div className="flex justify-end">
-            <LanguageSwitcher />
-          </div>
-          <WalletStatus />
-          <PortfolioOverview />
-          <PlatformWorkspace />
-          <FileCenter />
-          <PowerStationPanel />
-          <OperationsTables />
-          <AdminConsole />
-        </section>
-      </main>
+
+      <PortfolioOverview />
+
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <IndexerCard
+          label={t("operations.latestBlock")}
+          tone="sky"
+          value={status.data?.latestKnownBlock ?? 0}
+        />
+        <IndexerCard
+          label={t("operations.indexedBlock")}
+          tone="emerald"
+          value={status.data?.lastIndexedBlock ?? 0}
+        />
+        <IndexerCard
+          label={t("operations.lag")}
+          tone={lag > 0 ? "amber" : "emerald"}
+          value={t("operations.blocks", { count: lag })}
+        />
+        <IndexerCard
+          label={t("operations.failures")}
+          tone={(status.data?.failureCount ?? 0) > 0 ? "red" : "emerald"}
+          value={status.data?.failureCount ?? 0}
+        />
+      </section>
     </>
   );
 }

@@ -276,6 +276,32 @@ const en = {
     },
   },
 
+  nav: {
+    dashboard: "Dashboard",
+    platform: "Platform",
+    files: "Files",
+    assets: "On-Chain Assets",
+    revenue: "Revenue",
+    carbon: "Carbon & Green",
+    admin: "Admin",
+    dashboardDesc: "Portfolio overview & indexer status",
+    platformDesc: "Organizations, asset drafts & review",
+    filesDesc: "IPFS file upload & management",
+    assetsDesc: "On-chain stations & operation status",
+    revenueDesc: "Revenue deposits & claim records",
+    carbonDesc: "Carbon credits & green certificates",
+    adminDesc: "Chain operations & audit logs",
+  },
+
+  breadcrumb: {
+    dashboard: "Dashboard",
+    platform: "Platform",
+    files: "Files",
+    assets: "On-Chain Assets",
+    revenue: "Revenue",
+    carbon: "Carbon & Green",
+    admin: "Admin",
+  },
 };
 
 export default en;

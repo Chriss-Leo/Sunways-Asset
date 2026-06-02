@@ -8,6 +8,7 @@ import { useState } from "react";
 import { WagmiProvider } from "wagmi";
 import { wagmiConfig } from "@/config/wagmi";
 import { LocaleProvider, useT } from "@/i18n";
+import { AppLayout } from "@/components/layout/AppLayout";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -40,7 +41,9 @@ export default function App({ Component, pageProps }: AppProps) {
             <div
               className={`${geistSans.variable} ${geistMono.variable} flex min-h-screen flex-col antialiased`}
             >
-              <Component {...pageProps} />
+              <AppLayout>
+                <Component {...pageProps} />
+              </AppLayout>
             </div>
           </RainbowKitShell>
         </LocaleProvider>

@@ -276,6 +276,32 @@ const zh = {
     },
   },
 
+  nav: {
+    dashboard: "仪表盘",
+    platform: "平台工作台",
+    files: "文件管理",
+    assets: "链上资产",
+    revenue: "收益管理",
+    carbon: "碳资产与绿证",
+    admin: "管理后台",
+    dashboardDesc: "资产总览与索引器状态",
+    platformDesc: "组织、资产草稿与审核",
+    filesDesc: "IPFS 文件上传与管理",
+    assetsDesc: "链上电站与运维状态",
+    revenueDesc: "收益入账与领取记录",
+    carbonDesc: "碳积分与绿色证书",
+    adminDesc: "链上操作与审计日志",
+  },
+
+  breadcrumb: {
+    dashboard: "仪表盘",
+    platform: "平台工作台",
+    files: "文件管理",
+    assets: "链上资产",
+    revenue: "收益管理",
+    carbon: "碳资产与绿证",
+    admin: "管理后台",
+  },
 };
 
 export default zh;

@@ -84,6 +84,18 @@ export type GreenCertificateIssuance = {
   createdAt: string;
 };
 
+export type GreenCertificateRetirement = {
+  id: number;
+  chainId: number;
+  certificateId: number;
+  account: string;
+  amount: string;
+  txHash: string;
+  logIndex: number;
+  blockNumber: number;
+  createdAt: string;
+};
+
 export type UserAssetSummary = {
   account: string;
   stationCount: number;
@@ -252,6 +264,12 @@ export async function getCertificateIssuances() {
   );
 }
 
+export async function getCertificateRetirements() {
+  return request<{ items: GreenCertificateRetirement[] }>(
+    "/certificates/retirements",
+  );
+}
+
 export async function getAccountSummaries() {
   return request<{ items: UserAssetSummary[] }>("/accounts/summaries");
 }
@@ -309,6 +327,22 @@ export async function updateAssetDraftStatus(
   });
 }
 
+export async function updateAssetDraft(
+  id: number,
+  payload: Record<string, string>,
+) {
+  return request<AssetDraft>(`/platform/assets/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteAssetDraft(id: number) {
+  return request<{ status: string }>(`/platform/assets/${id}`, {
+    method: "DELETE",
+  });
+}
+
 export async function getAssetFiles(assetDraftId?: number) {
   const query = assetDraftId ? `?assetDraftId=${assetDraftId}` : "";
   return request<{ items: AssetFile[] }>(`/platform/files${query}`);
@@ -323,20 +357,6 @@ export async function createAssetFile(payload: Partial<AssetFile>) {
 
 export async function getPlatformAuditLogs() {
   return request<{ items: PlatformAuditLog[] }>("/platform/audit-logs");
-}
-
-export async function registerStation(payload: {
-  owner: string;
-  name: string;
-  region: string;
-  capacityKw: string;
-  commissionedAt: number;
-  metadataUri: string;
-}) {
-  return request<AdminTxResponse>("/admin/stations", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
 }
 
 export async function depositRevenue(payload: {
@@ -373,6 +393,36 @@ export async function issueGreenCertificate(payload: {
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export async function burnCarbonCredits(payload: { amount: string }) {
+  return request<AdminTxResponse>("/admin/carbon-credits/burn", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function burnGreenCertificate(payload: {
+  certificateId: number;
+  amount: string;
+}) {
+  return request<AdminTxResponse>("/admin/green-certificates/burn", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateStationChainStatus(
+  stationId: number,
+  payload: { status: number },
+) {
+  return request<AdminTxResponse>(
+    `/admin/stations/${stationId}/chain-status`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
 export async function updateStationReview(

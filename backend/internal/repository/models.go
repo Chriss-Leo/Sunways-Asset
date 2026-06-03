@@ -214,6 +214,18 @@ type GreenCertificateIssuance struct {
 	CreatedAt       time.Time `json:"createdAt"`
 }
 
+type GreenCertificateRetirement struct {
+	ID            uint      `gorm:"primaryKey" json:"id"`
+	ChainID       int64     `gorm:"index" json:"chainId"`
+	CertificateID uint64    `gorm:"index" json:"certificateId"`
+	Account       string    `gorm:"size:42;index" json:"account"`
+	Amount        string    `gorm:"size:80" json:"amount"`
+	TxHash        string    `gorm:"size:66;uniqueIndex:idx_certificate_retirement_log" json:"txHash"`
+	LogIndex      uint      `gorm:"uniqueIndex:idx_certificate_retirement_log" json:"logIndex"`
+	BlockNumber   uint64    `gorm:"index" json:"blockNumber"`
+	CreatedAt     time.Time `json:"createdAt"`
+}
+
 type UserAssetSummary struct {
 	ID                    uint      `gorm:"primaryKey" json:"id"`
 	ChainID               int64     `gorm:"uniqueIndex:idx_user_asset_chain_account" json:"chainId"`

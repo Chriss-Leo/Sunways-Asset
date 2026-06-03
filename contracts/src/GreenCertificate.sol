@@ -76,6 +76,14 @@ contract GreenCertificate is ERC1155URIStorage, ERC1155Supply, ERC1155Pausable, 
         return _certificates[certificateId];
     }
 
+    /// @notice Burns certificate tokens from an account. Reduces total supply.
+    /// @param account Holder of the tokens to burn.
+    /// @param id Certificate token ID.
+    /// @param amount Number of certificates to burn.
+    function burn(address account, uint256 id, uint256 amount) external onlyRole(ISSUER_ROLE) {
+        _burn(account, id, amount);
+    }
+
     /// @notice Pauses certificate transfers.
     function pause() external onlyRole(PAUSER_ROLE) {
         _pause();

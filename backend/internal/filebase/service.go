@@ -3,10 +3,13 @@ package filebase
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"mime"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -29,6 +32,8 @@ type Service struct {
 	client     *s3.Client
 	bucket     string
 	gatewayURL string
+	localDir   string
+	localURL   string
 }
 
 func New(accessKey, secretKey, bucket, gatewayURL string) (*Service, error) {
@@ -59,13 +64,37 @@ func New(accessKey, secretKey, bucket, gatewayURL string) (*Service, error) {
 	}, nil
 }
 
+func NewLocal(localDir, localURL string) (*Service, error) {
+	if localDir == "" {
+		localDir = "./data/files"
+	}
+	if err := os.MkdirAll(localDir, 0o755); err != nil {
+		return nil, fmt.Errorf("filebase: create local dir: %w", err)
+	}
+	return &Service{
+		localDir: localDir,
+		localURL: localURL,
+	}, nil
+}
+
 func (s *Service) Enabled() bool {
-	return s != nil && s.client != nil
+	return s != nil && (s.client != nil || s.localDir != "")
+}
+
+func (s *Service) LocalDir() string {
+	if s == nil {
+		return ""
+	}
+	return s.localDir
 }
 
 func (s *Service) Upload(ctx context.Context, name string, reader io.Reader, size int64) (UploadResult, error) {
 	if !s.Enabled() {
 		return UploadResult{}, ErrDisabled
+	}
+
+	if s.localDir != "" {
+		return s.uploadLocal(name, reader, size)
 	}
 
 	contentType := mime.TypeByExtension(filepath.Ext(name))
@@ -103,6 +132,29 @@ func (s *Service) Upload(ctx context.Context, name string, reader io.Reader, siz
 		CID:        cid,
 		IPFSURI:    ipfsURI,
 		GatewayURL: gatewayURL,
+		SizeBytes:  size,
+	}, nil
+}
+
+func (s *Service) uploadLocal(name string, reader io.Reader, size int64) (UploadResult, error) {
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		return UploadResult{}, fmt.Errorf("filebase: read for local storage: %w", err)
+	}
+
+	hash := sha256.Sum256(data)
+	cid := hex.EncodeToString(hash[:])
+
+	filename := fmt.Sprintf("%s-%s", cid[:12], name)
+	filePath := filepath.Join(s.localDir, filename)
+	if err := os.WriteFile(filePath, data, 0o644); err != nil {
+		return UploadResult{}, fmt.Errorf("filebase: write local file: %w", err)
+	}
+
+	return UploadResult{
+		CID:        cid,
+		IPFSURI:    fmt.Sprintf("local://%s/%s", cid[:12], name),
+		GatewayURL: fmt.Sprintf("%s/%s", s.localURL, filename),
 		SizeBytes:  size,
 	}, nil
 }

@@ -1,23 +1,23 @@
 import type { FormEvent, ReactNode } from "react";
-import { useMemo, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { parseEther } from "viem";
 import { useAccount } from "wagmi";
 import { useT } from "@/i18n";
 import {
+  burnCarbonCredits,
+  burnGreenCertificate,
   depositRevenue,
+  getCertificateIssuances,
+  getStations,
   issueGreenCertificate,
   mintCarbonCredits,
-  registerStation,
+  updateStationChainStatus,
   updateStationOperationStatus,
   updateStationReview,
 } from "@/services/dashboard";
 
 const fallbackAccount = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
-
-function toUnixDate(value: string) {
-  return Math.floor(new Date(`${value}T00:00:00Z`).getTime() / 1000);
-}
 
 function shortAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -25,11 +25,9 @@ function shortAddress(address: string) {
 
 function TxResult({
   error,
-  stationId,
   value,
 }: {
   error?: Error | null;
-  stationId?: number;
   value?: string;
 }) {
   const { t } = useT();
@@ -49,11 +47,6 @@ function TxResult({
         {t("admin.submitted")}
       </p>
       <p className="mt-1 truncate font-mono text-xs text-emerald-800">{value}</p>
-      {stationId !== undefined ? (
-        <p className="mt-1 font-mono text-xs font-semibold text-emerald-900">
-          {t("platform.stationMinted")}: #{stationId}
-        </p>
-      ) : null}
     </div>
   );
 }
@@ -80,6 +73,40 @@ function Field({
         type={type}
         value={value}
       />
+    </label>
+  );
+}
+
+function SelectField({
+  label,
+  onChange,
+  options,
+  placeholder,
+  value,
+}: {
+  label: string;
+  onChange: (value: string) => void;
+  options: { label: string; value: string }[];
+  placeholder: string;
+  value: string;
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+        {label}
+      </span>
+      <select
+        className="mt-1 h-11 w-full rounded-md border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-950 outline-none transition focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 disabled:opacity-50"
+        onChange={(event) => onChange(event.target.value)}
+        value={value}
+      >
+        <option value="">{options.length === 0 ? "—" : placeholder}</option>
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
     </label>
   );
 }
@@ -143,16 +170,7 @@ export function AdminConsole() {
   const { address } = useAccount();
   const queryClient = useQueryClient();
   const account: string = address ?? fallbackAccount;
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
-  const [station, setStation] = useState({
-    capacityKw: "3000",
-    commissionedAt: today,
-    metadataUri: "ipfs://sunways/stations/new",
-    name: "Sunways New Solar Station",
-    owner: account,
-    region: "Jiangsu, CN",
-  });
   const [revenue, setRevenue] = useState({ amountEth: "0.25", stationId: "1" });
   const [carbon, setCarbon] = useState({
     account,
@@ -180,6 +198,41 @@ export function AdminConsole() {
     updatedBy: account,
     utilization: "86.4%",
   });
+  const [burnCarbon, setBurnCarbon] = useState({ amount: "100" });
+  const [chainStatus, setChainStatus] = useState({
+    stationId: "1",
+    status: "1",
+  });
+  const [burnCert, setBurnCert] = useState({
+    amount: "1",
+    certificateId: "",
+  });
+
+  const stationsQuery = useQuery({
+    queryKey: ["stations"],
+    queryFn: getStations,
+    retry: false,
+    refetchInterval: 10_000,
+  });
+
+  const stationIds = [
+    ...new Set(
+      (stationsQuery.data?.items ?? []).map((item) => item.stationId),
+    ),
+  ].sort((a, b) => a - b);
+
+  const certIssuances = useQuery({
+    queryKey: ["certificate-issuances"],
+    queryFn: getCertificateIssuances,
+    retry: false,
+    refetchInterval: 10_000,
+  });
+
+  const certIds = [
+    ...new Set(
+      (certIssuances.data?.items ?? []).map((item) => item.certificateId),
+    ),
+  ].sort((a, b) => a - b);
 
   const invalidate = async () => {
     await Promise.all([
@@ -194,14 +247,6 @@ export function AdminConsole() {
     ]);
   };
 
-  const stationMutation = useMutation({
-    mutationFn: () =>
-      registerStation({
-        ...station,
-        commissionedAt: toUnixDate(station.commissionedAt),
-      }),
-    onSuccess: invalidate,
-  });
   const revenueMutation = useMutation({
     mutationFn: () =>
       depositRevenue({
@@ -245,6 +290,28 @@ export function AdminConsole() {
       }),
     onSuccess: invalidate,
   });
+  const burnCarbonMutation = useMutation({
+    mutationFn: () =>
+      burnCarbonCredits({
+        amount: parseEther(burnCarbon.amount).toString(),
+      }),
+    onSuccess: invalidate,
+  });
+  const chainStatusMutation = useMutation({
+    mutationFn: () =>
+      updateStationChainStatus(Number(chainStatus.stationId), {
+        status: Number(chainStatus.status),
+      }),
+    onSuccess: invalidate,
+  });
+  const burnCertMutation = useMutation({
+    mutationFn: () =>
+      burnGreenCertificate({
+        amount: burnCert.amount,
+        certificateId: Number(burnCert.certificateId),
+      }),
+    onSuccess: invalidate,
+  });
 
   const submit = (event: FormEvent<HTMLFormElement>, action: () => void) => {
     event.preventDefault();
@@ -277,72 +344,6 @@ export function AdminConsole() {
 
       <div className="grid gap-5 bg-zinc-50 p-5 xl:grid-cols-2">
         <ActionCard
-          accent="emerald"
-          detail={t("admin.registerStationDetail")}
-          eyebrow={t("admin.asset")}
-          title={t("admin.registerStation")}
-        >
-          <form
-            onSubmit={(event) => submit(event, () => stationMutation.mutate())}
-          >
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field
-                label={t("admin.owner")}
-                onChange={(owner) =>
-                  setStation((value) => ({ ...value, owner }))
-                }
-                value={station.owner}
-              />
-              <Field
-                label={t("admin.name")}
-                onChange={(name) => setStation((value) => ({ ...value, name }))}
-                value={station.name}
-              />
-              <Field
-                label={t("admin.region")}
-                onChange={(region) =>
-                  setStation((value) => ({ ...value, region }))
-                }
-                value={station.region}
-              />
-              <Field
-                label={t("admin.capacityKw")}
-                onChange={(capacityKw) =>
-                  setStation((value) => ({ ...value, capacityKw }))
-                }
-                value={station.capacityKw}
-              />
-              <Field
-                label={t("admin.commissioned")}
-                onChange={(commissionedAt) =>
-                  setStation((value) => ({ ...value, commissionedAt }))
-                }
-                type="date"
-                value={station.commissionedAt}
-              />
-              <Field
-                label={t("admin.metadataUri")}
-                onChange={(metadataUri) =>
-                  setStation((value) => ({ ...value, metadataUri }))
-                }
-                value={station.metadataUri}
-              />
-            </div>
-            <div className="mt-4 flex items-center justify-between gap-3">
-              <p className="text-xs text-zinc-500">{t("admin.mintsStation")}</p>
-              <PrimaryButton disabled={stationMutation.isPending}>
-                {stationMutation.isPending ? t("admin.submitting") : t("admin.register")}
-              </PrimaryButton>
-            </div>
-            <TxResult
-              error={stationMutation.error}
-              stationId={stationMutation.data?.stationId}
-              value={stationMutation.data?.txHash}
-            />
-          </form>
-        </ActionCard>
-
-        <ActionCard
           accent="sky"
           detail={t("admin.depositRevenueDetail")}
           eyebrow={t("admin.revenue")}
@@ -352,11 +353,13 @@ export function AdminConsole() {
             onSubmit={(event) => submit(event, () => revenueMutation.mutate())}
           >
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field
+              <SelectField
                 label={t("admin.stationId")}
                 onChange={(stationId) =>
                   setRevenue((value) => ({ ...value, stationId }))
                 }
+                options={stationIds.map((id) => ({ label: `#${id}`, value: String(id) }))}
+                placeholder={t("admin.selectStation")}
                 value={revenue.stationId}
               />
               <Field
@@ -395,11 +398,13 @@ export function AdminConsole() {
                 }
                 value={carbon.account}
               />
-              <Field
+              <SelectField
                 label={t("admin.stationId")}
                 onChange={(stationId) =>
                   setCarbon((value) => ({ ...value, stationId }))
                 }
+                options={stationIds.map((id) => ({ label: `#${id}`, value: String(id) }))}
+                placeholder={t("admin.selectStation")}
                 value={carbon.stationId}
               />
               <Field
@@ -449,11 +454,13 @@ export function AdminConsole() {
                 }
                 value={certificate.account}
               />
-              <Field
+              <SelectField
                 label={t("admin.stationId")}
                 onChange={(stationId) =>
                   setCertificate((value) => ({ ...value, stationId }))
                 }
+                options={stationIds.map((id) => ({ label: `#${id}`, value: String(id) }))}
+                placeholder={t("admin.selectStation")}
                 value={certificate.stationId}
               />
               <Field
@@ -506,11 +513,13 @@ export function AdminConsole() {
         >
           <form onSubmit={(event) => submit(event, () => reviewMutation.mutate())}>
             <div className="grid gap-3 sm:grid-cols-3">
-              <Field
+              <SelectField
                 label={t("admin.stationId")}
                 onChange={(stationId) =>
                   setReview((value) => ({ ...value, stationId }))
                 }
+                options={stationIds.map((id) => ({ label: `#${id}`, value: String(id) }))}
+                placeholder={t("admin.selectStation")}
                 value={review.stationId}
               />
               <Field
@@ -537,6 +546,153 @@ export function AdminConsole() {
         </ActionCard>
 
         <ActionCard
+          accent="amber"
+          detail={t("admin.burnCarbonCreditsDetail")}
+          eyebrow={t("admin.carbon")}
+          title={t("admin.burnCarbonCredits")}
+        >
+          <form
+            onSubmit={(event) =>
+              submit(event, () => burnCarbonMutation.mutate())
+            }
+          >
+            <div className="grid gap-3">
+              <Field
+                label={t("admin.amountSwc")}
+                onChange={(amount) =>
+                  setBurnCarbon((value) => ({ ...value, amount }))
+                }
+                value={burnCarbon.amount}
+              />
+            </div>
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <p className="text-xs text-zinc-500">
+                {t("admin.mintsErc20")}
+              </p>
+              <PrimaryButton disabled={burnCarbonMutation.isPending}>
+                {burnCarbonMutation.isPending ? t("admin.submitting") : t("admin.burn")}
+              </PrimaryButton>
+            </div>
+            <TxResult
+              error={burnCarbonMutation.error}
+              value={burnCarbonMutation.data?.txHash}
+            />
+          </form>
+        </ActionCard>
+
+        <ActionCard
+          accent="amber"
+          detail={t("admin.burnGreenCertificateDetail")}
+          eyebrow={t("admin.certificates")}
+          title={t("admin.burnGreenCertificate")}
+        >
+          <form
+            onSubmit={(event) =>
+              submit(event, () => burnCertMutation.mutate())
+            }
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                  {t("admin.certificateId")}
+                </span>
+                <select
+                  className="mt-1 h-11 w-full rounded-md border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-950 outline-none transition focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                  onChange={(event) =>
+                    setBurnCert((value) => ({
+                      ...value,
+                      certificateId: event.target.value,
+                    }))
+                  }
+                  value={burnCert.certificateId}
+                >
+                  <option value="">{certIds.length === 0 ? "—" : "Select..."}</option>
+                  {certIds.map((id) => (
+                    <option key={id} value={String(id)}>
+                      #{id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <Field
+                label={t("admin.amount")}
+                onChange={(amount) =>
+                  setBurnCert((value) => ({ ...value, amount }))
+                }
+                value={burnCert.amount}
+              />
+            </div>
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <p className="text-xs text-zinc-500">{t("admin.burnsErc1155")}</p>
+              <PrimaryButton disabled={burnCertMutation.isPending || !burnCert.certificateId}>
+                {burnCertMutation.isPending ? t("admin.submitting") : t("admin.burn")}
+              </PrimaryButton>
+            </div>
+            <TxResult
+              error={burnCertMutation.error}
+              value={burnCertMutation.data?.txHash}
+            />
+          </form>
+        </ActionCard>
+
+        <ActionCard
+          accent="emerald"
+          detail={t("admin.updateStationChainStatusDetail")}
+          eyebrow={t("admin.asset")}
+          title={t("admin.updateStationChainStatus")}
+        >
+          <form
+            onSubmit={(event) =>
+              submit(event, () => chainStatusMutation.mutate())
+            }
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              <SelectField
+                label={t("admin.stationId")}
+                onChange={(stationId) =>
+                  setChainStatus((value) => ({ ...value, stationId }))
+                }
+                options={stationIds.map((id) => ({ label: `#${id}`, value: String(id) }))}
+                placeholder={t("admin.selectStation")}
+                value={chainStatus.stationId}
+              />
+              <label className="block">
+                <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                  {t("admin.chainStatus")}
+                </span>
+                <select
+                  className="mt-1 h-11 w-full rounded-md border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-950 outline-none transition focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                  onChange={(event) =>
+                    setChainStatus((value) => ({
+                      ...value,
+                      status: event.target.value,
+                    }))
+                  }
+                  value={chainStatus.status}
+                >
+                  <option value="0">{t("admin.statusPending")} (0)</option>
+                  <option value="1">{t("admin.statusActive")} (1)</option>
+                  <option value="2">{t("admin.statusSuspended")} (2)</option>
+                  <option value="3">{t("admin.statusRetired")} (3)</option>
+                </select>
+              </label>
+            </div>
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <p className="text-xs text-zinc-500">{t("admin.refreshesHealth")}</p>
+              <PrimaryButton disabled={chainStatusMutation.isPending}>
+                {chainStatusMutation.isPending
+                  ? t("admin.submitting")
+                  : t("admin.updateStatus")}
+              </PrimaryButton>
+            </div>
+            <TxResult
+              error={chainStatusMutation.error}
+              value={chainStatusMutation.data?.txHash}
+            />
+          </form>
+        </ActionCard>
+
+        <ActionCard
           accent="emerald"
           detail={t("admin.updateOperationStatusDetail")}
           eyebrow={t("admin.operations")}
@@ -546,11 +702,13 @@ export function AdminConsole() {
             onSubmit={(event) => submit(event, () => operationMutation.mutate())}
           >
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field
+              <SelectField
                 label={t("admin.stationId")}
                 onChange={(stationId) =>
                   setOperation((value) => ({ ...value, stationId }))
                 }
+                options={stationIds.map((id) => ({ label: `#${id}`, value: String(id) }))}
+                placeholder={t("admin.selectStation")}
                 value={operation.stationId}
               />
               <Field

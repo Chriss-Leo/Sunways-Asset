@@ -27,6 +27,10 @@ const powerStationABI = `[
     {"name":"metadataURI","type":"string","indexed":false},
     {"name":"capacityKw","type":"uint256","indexed":false}
   ]},
+  {"type":"event","name":"StationStatusChanged","inputs":[
+    {"name":"stationId","type":"uint256","indexed":true},
+    {"name":"status","type":"uint8","indexed":false}
+  ]},
   {"type":"function","name":"station","stateMutability":"view","inputs":[{"name":"stationId","type":"uint256"}],"outputs":[{"type":"tuple","components":[{"name":"name","type":"string"},{"name":"region","type":"string"},{"name":"capacityKw","type":"uint256"},{"name":"commissionedAt","type":"uint64"},{"name":"status","type":"uint8"}]}]}
 ]`
 
@@ -66,6 +70,13 @@ const greenCertificateABI = `[
     {"name":"certificateType","type":"string","indexed":false},
     {"name":"period","type":"string","indexed":false},
     {"name":"evidenceURI","type":"string","indexed":false}
+  ]},
+  {"type":"event","name":"TransferSingle","inputs":[
+    {"name":"operator","type":"address","indexed":true},
+    {"name":"from","type":"address","indexed":true},
+    {"name":"to","type":"address","indexed":true},
+    {"name":"id","type":"uint256","indexed":false},
+    {"name":"value","type":"uint256","indexed":false}
   ]}
 ]`
 
@@ -256,6 +267,8 @@ func (i *Indexer) handleLog(ctx context.Context, log types.Log) error {
 	switch log.Topics[0] {
 	case contractABI.Events["StationRegistered"].ID:
 		return i.handleStationRegistered(ctx, contractABI, log)
+	case contractABI.Events["StationStatusChanged"].ID:
+		return i.handleStationStatusChanged(contractABI, log)
 	case i.abis["RevenueVault"].Events["RevenueDeposited"].ID:
 		return i.handleRevenueDeposited(i.abis["RevenueVault"], log)
 	case i.abis["RevenueVault"].Events["RevenueClaimed"].ID:
@@ -266,6 +279,8 @@ func (i *Indexer) handleLog(ctx context.Context, log types.Log) error {
 		return i.handleCarbonTransfer(i.abis["CarbonCreditToken"], log)
 	case i.abis["GreenCertificate"].Events["CertificateIssued"].ID:
 		return i.handleCertificateIssued(i.abis["GreenCertificate"], log)
+	case i.abis["GreenCertificate"].Events["TransferSingle"].ID:
+		return i.handleCertificateTransfer(i.abis["GreenCertificate"], log)
 	default:
 		return nil
 	}
@@ -314,6 +329,22 @@ func (i *Indexer) handleStationRegistered(ctx context.Context, contractABI abi.A
 		TxHash:         log.TxHash.Hex(),
 		BlockNumber:    log.BlockNumber,
 	})
+}
+
+func (i *Indexer) handleStationStatusChanged(contractABI abi.ABI, log types.Log) error {
+	values := map[string]any{}
+	if err := contractABI.UnpackIntoMap(values, "StationStatusChanged", log.Data); err != nil {
+		return err
+	}
+	stationID := topicBig(log.Topics[1])
+	status := uint8(values["status"].(uint8))
+	if err := i.store.UpsertChainEvent(i.chainEvent(log, "PowerStationNFT", "StationStatusChanged", mustJSON(map[string]any{
+		"stationId": stationID.String(),
+		"status":    status,
+	}))); err != nil {
+		return err
+	}
+	return i.store.UpdateStationChainStatus(i.chain.ChainID, stationID.Uint64(), statusLabel(status))
 }
 
 func (i *Indexer) handleRevenueDeposited(contractABI abi.ABI, log types.Log) error {
@@ -424,6 +455,30 @@ func (i *Indexer) handleCertificateIssued(contractABI abi.ABI, log types.Log) er
 		return err
 	}
 	return i.store.CreateGreenCertificateIssuance(issuance)
+}
+
+func (i *Indexer) handleCertificateTransfer(contractABI abi.ABI, log types.Log) error {
+	to := topicAddress(log.Topics[3])
+	if to != (common.Address{}) {
+		return nil
+	}
+	values := map[string]any{}
+	if err := contractABI.UnpackIntoMap(values, "TransferSingle", log.Data); err != nil {
+		return err
+	}
+	retirement := repository.GreenCertificateRetirement{
+		ChainID:       i.chain.ChainID,
+		CertificateID: values["id"].(*big.Int).Uint64(),
+		Account:       topicAddress(log.Topics[2]).Hex(),
+		Amount:        values["value"].(*big.Int).String(),
+		TxHash:        log.TxHash.Hex(),
+		LogIndex:      uint(log.Index),
+		BlockNumber:   log.BlockNumber,
+	}
+	if err := i.store.UpsertChainEvent(i.chainEvent(log, "GreenCertificate", "CertificateRetired", mustJSON(retirement))); err != nil {
+		return err
+	}
+	return i.store.CreateGreenCertificateRetirement(retirement)
 }
 
 type stationDetail struct {

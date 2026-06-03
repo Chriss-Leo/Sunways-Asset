@@ -23,10 +23,12 @@ type Postgres struct {
 }
 
 type Filebase struct {
-	AccessKey string
-	SecretKey string
-	Bucket    string
+	AccessKey  string
+	SecretKey  string
+	Bucket     string
 	GatewayURL string
+	LocalDir   string
+	LocalURL   string
 }
 
 type App struct {
@@ -74,6 +76,8 @@ func Load() App {
 			SecretKey:  env("FILEBASE_SECRET_KEY", ""),
 			Bucket:     env("FILEBASE_BUCKET", ""),
 			GatewayURL: env("FILEBASE_GATEWAY_URL", "https://ipfs.filebase.io/ipfs"),
+			LocalDir:   env("FILEBASE_LOCAL_DIR", "./data/files"),
+			LocalURL:   env("FILEBASE_LOCAL_URL", "http://localhost:8080/files"),
 		},
 		Postgres: Postgres{
 			Host:         env("POSTGRES_HOST", "127.0.0.1"),

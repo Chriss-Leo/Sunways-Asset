@@ -42,5 +42,7 @@ yarn-error.log*
 *.tsbuildinfo
 
 # Go 调试生成的临时二进制文件
-__debug_bin
-debug
+__debug_bin*
+
+# Go data directory (local file storage fallback)
+backend/data/

@@ -7,6 +7,7 @@ import {
   getCarbonIssuances,
   getCarbonRetirements,
   getCertificateIssuances,
+  getCertificateRetirements,
   getIndexerStatus,
   getRevenueClaims,
   getRevenueDeposits,
@@ -15,6 +16,7 @@ import {
   type CarbonCreditIssuance,
   type CarbonCreditRetirement,
   type GreenCertificateIssuance,
+  type GreenCertificateRetirement,
   type RevenueClaim,
   type RevenueDeposit,
   type Station,
@@ -359,6 +361,12 @@ export function OperationsTables() {
     retry: false,
     refetchInterval: 10_000,
   });
+  const certRetirements = useQuery({
+    queryKey: ["certificate-retirements"],
+    queryFn: getCertificateRetirements,
+    retry: false,
+    refetchInterval: 10_000,
+  });
   const status = useQuery({
     queryKey: ["indexer-status"],
     queryFn: getIndexerStatus,
@@ -414,17 +422,30 @@ export function OperationsTables() {
     )),
   ];
 
-  const certificateRecords = (certificates.data?.items ?? []).map(
-    (item: GreenCertificateIssuance) => (
-      <RecordItem
-        key={`certificate-${item.txHash}-${item.certificateId}`}
-        meta={`${item.certificateType} · ${item.period}`}
-        title={t("operations.certificateNumber", { id: item.certificateId })}
-        txHash={item.txHash}
-        value={t("operations.issued", { count: Number(item.amount).toLocaleString() })}
-      />
+  const certificateRecords = [
+    ...(certificates.data?.items ?? []).map(
+      (item: GreenCertificateIssuance) => (
+        <RecordItem
+          key={`certificate-${item.txHash}-${item.certificateId}`}
+          meta={`${item.certificateType} · ${item.period}`}
+          title={t("operations.certificateNumber", { id: item.certificateId })}
+          txHash={item.txHash}
+          value={t("operations.issued", { count: Number(item.amount).toLocaleString() })}
+        />
+      ),
     ),
-  );
+    ...(certRetirements.data?.items ?? []).map(
+      (item: GreenCertificateRetirement) => (
+        <RecordItem
+          key={`cert-retire-${item.txHash}-${item.certificateId}`}
+          meta={shortAddress(item.account)}
+          title={t("operations.certificateRetired", { id: item.certificateId })}
+          txHash={item.txHash}
+          value={t("operations.retired", { count: Number(item.amount).toLocaleString() })}
+        />
+      ),
+    ),
+  ];
 
   const lag = status.data?.lagBlocks ?? 0;
 

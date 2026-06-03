@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -70,6 +71,7 @@ func (s *Server) Router() *gin.Engine {
 	router.GET("/carbon/issuances", s.listCarbonIssuances)
 	router.GET("/carbon/retirements", s.listCarbonRetirements)
 	router.GET("/certificates/issuances", s.listCertificateIssuances)
+	router.GET("/certificates/retirements", s.listCertificateRetirements)
 	router.GET("/accounts/summaries", s.listAccountSummaries)
 	router.GET("/indexer/status", s.indexerStatus)
 	router.GET("/dashboard/summary", s.dashboardSummary)
@@ -80,6 +82,8 @@ func (s *Server) Router() *gin.Engine {
 	router.GET("/platform/assets", s.listAssetDrafts)
 	router.POST("/platform/assets", s.createAssetDraft)
 	router.GET("/platform/assets/:id", s.getAssetDraft)
+	router.PATCH("/platform/assets/:id", s.updateAssetDraft)
+	router.DELETE("/platform/assets/:id", s.deleteAssetDraft)
 	router.PATCH("/platform/assets/:id/status", s.updateAssetDraftStatus)
 	router.GET("/platform/files", s.listAssetFiles)
 	router.POST("/platform/files", s.createAssetFile)
@@ -88,12 +92,15 @@ func (s *Server) Router() *gin.Engine {
 	router.POST("/platform/assets/:id/metadata", s.generateAssetMetadata)
 	router.GET("/platform/assets/:id/issuance-check", s.checkAssetIssuanceReady)
 	router.POST("/platform/assets/:id/issue", s.issueAssetDraft)
-	router.POST("/admin/stations", s.adminRegisterStation)
+	router.GET("/files/:name", s.serveLocalFile)
 	router.POST("/admin/revenue-deposits", s.adminDepositRevenue)
 	router.POST("/admin/carbon-credits", s.adminMintCarbon)
+	router.POST("/admin/carbon-credits/burn", s.adminBurnCarbon)
 	router.POST("/admin/green-certificates", s.adminIssueCertificate)
+	router.POST("/admin/green-certificates/burn", s.adminBurnCertificate)
 	router.PATCH("/admin/stations/:id/review", s.adminReviewStation)
 	router.PATCH("/admin/stations/:id/operation-status", s.adminUpdateStationOperationStatus)
+	router.PATCH("/admin/stations/:id/chain-status", s.adminUpdateStationChainStatus)
 
 	return router
 }
@@ -246,6 +253,11 @@ func (s *Server) listCarbonRetirements(c *gin.Context) {
 func (s *Server) listCertificateIssuances(c *gin.Context) {
 	items, err := s.store.ListGreenCertificateIssuances(limitFromQuery(c, 100))
 	writeList(c, items, err, "failed to list certificate issuances")
+}
+
+func (s *Server) listCertificateRetirements(c *gin.Context) {
+	items, err := s.store.ListGreenCertificateRetirements(limitFromQuery(c, 100))
+	writeList(c, items, err, "failed to list certificate retirements")
 }
 
 func (s *Server) listAccountSummaries(c *gin.Context) {
@@ -409,6 +421,65 @@ func (s *Server) getAssetDraft(c *gin.Context) {
 	c.JSON(http.StatusOK, asset)
 }
 
+func (s *Server) updateAssetDraft(c *gin.Context) {
+	id, ok := uintParam(c, "id")
+	if !ok {
+		return
+	}
+	asset, err := s.store.GetAssetDraft(id)
+	if err != nil {
+		writeError(c, http.StatusNotFound, "asset draft not found")
+		return
+	}
+	if asset.Status == "onchain" {
+		writeError(c, http.StatusBadRequest, "cannot edit an on-chain asset")
+		return
+	}
+	var req map[string]any
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeError(c, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	editable := map[string]bool{
+		"name": true, "assetType": true, "country": true, "region": true,
+		"address": true, "latitude": true, "longitude": true,
+		"capacityKw": true, "expectedAnnualKwh": true, "expectedRevenue": true,
+		"ownerWallet": true, "description": true,
+	}
+	updates := map[string]any{}
+	for k, v := range req {
+		if editable[k] {
+			updates[k] = v
+		}
+	}
+	if len(updates) == 0 {
+		writeError(c, http.StatusBadRequest, "no editable fields provided")
+		return
+	}
+	updated, err := s.store.UpdateAssetDraft(id, updates)
+	if err != nil {
+		writeError(c, http.StatusInternalServerError, "failed to update asset draft")
+		return
+	}
+	c.JSON(http.StatusOK, updated)
+}
+
+func (s *Server) deleteAssetDraft(c *gin.Context) {
+	id, ok := uintParam(c, "id")
+	if !ok {
+		return
+	}
+	if err := s.store.DeleteAssetDraft(id); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			writeError(c, http.StatusBadRequest, "only drafts in 'draft' or 'rejected' status can be deleted")
+			return
+		}
+		writeError(c, http.StatusInternalServerError, "failed to delete asset draft")
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "deleted"})
+}
+
 func (s *Server) updateAssetDraftStatus(c *gin.Context) {
 	id, ok := uintParam(c, "id")
 	if !ok {
@@ -490,26 +561,6 @@ func (s *Server) listPlatformAuditLogs(c *gin.Context) {
 	writeList(c, items, err, "failed to list platform audit logs")
 }
 
-func (s *Server) adminRegisterStation(c *gin.Context) {
-	var req admin.RegisterStationRequest
-	if !s.bindAdmin(c, &req) {
-		return
-	}
-	result, err := s.admin.RegisterStationAndWait(c.Request.Context(), req)
-	if err != nil {
-		if errors.Is(err, admin.ErrDisabled) {
-			writeError(c, http.StatusServiceUnavailable, err.Error())
-			return
-		}
-		writeError(c, http.StatusBadRequest, err.Error())
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{
-		"txHash":    result.TxHash.Hex(),
-		"stationId": result.StationID,
-	})
-}
-
 func (s *Server) adminDepositRevenue(c *gin.Context) {
 	var req admin.DepositRevenueRequest
 	if !s.bindAdmin(c, &req) {
@@ -534,6 +585,44 @@ func (s *Server) adminIssueCertificate(c *gin.Context) {
 		return
 	}
 	hash, err := s.admin.IssueCertificate(c.Request.Context(), req)
+	s.writeTx(c, hash, err)
+}
+
+func (s *Server) adminBurnCarbon(c *gin.Context) {
+	var req admin.BurnCarbonRequest
+	if !s.bindAdmin(c, &req) {
+		return
+	}
+	hash, err := s.admin.BurnCarbon(c.Request.Context(), req)
+	s.writeTx(c, hash, err)
+}
+
+func (s *Server) adminUpdateStationChainStatus(c *gin.Context) {
+	stationID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		writeError(c, http.StatusBadRequest, "invalid station id")
+		return
+	}
+	var req struct {
+		Status uint8 `json:"status"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeError(c, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	hash, err := s.admin.UpdateStationChainStatus(c.Request.Context(), admin.UpdateStationChainStatusRequest{
+		StationID: stationID,
+		Status:    req.Status,
+	})
+	s.writeTx(c, hash, err)
+}
+
+func (s *Server) adminBurnCertificate(c *gin.Context) {
+	var req admin.BurnCertificateRequest
+	if !s.bindAdmin(c, &req) {
+		return
+	}
+	hash, err := s.admin.BurnCertificate(c.Request.Context(), req)
 	s.writeTx(c, hash, err)
 }
 
@@ -595,6 +684,15 @@ func (s *Server) adminUpdateStationOperationStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
+func (s *Server) serveLocalFile(c *gin.Context) {
+	name := c.Param("name")
+	if s.filebase == nil || s.filebase.LocalDir() == "" {
+		writeError(c, http.StatusNotFound, "local file serving is not enabled")
+		return
+	}
+	c.File(filepath.Join(s.filebase.LocalDir(), filepath.Base(name)))
+}
+
 func (s *Server) uploadFileToFilebase(c *gin.Context) {
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
@@ -604,7 +702,7 @@ func (s *Server) uploadFileToFilebase(c *gin.Context) {
 	defer file.Close()
 
 	if s.filebase == nil || !s.filebase.Enabled() {
-		writeError(c, http.StatusServiceUnavailable, "filebase service is not configured")
+		writeError(c, http.StatusServiceUnavailable, "file storage service is not configured")
 		return
 	}
 
@@ -685,7 +783,7 @@ func (s *Server) generateAssetMetadata(c *gin.Context) {
 
 	var metadataURI string
 	if s.filebase == nil || !s.filebase.Enabled() {
-		writeError(c, http.StatusServiceUnavailable, "filebase service is not configured — metadata cannot be uploaded to IPFS")
+		writeError(c, http.StatusServiceUnavailable, "file storage service is not configured — metadata cannot be stored")
 		return
 	}
 	name := fmt.Sprintf("metadata-%d.json", id)
@@ -789,6 +887,7 @@ func (s *Server) issueAssetDraft(c *gin.Context) {
 	checks, ready := issuanceChecks(asset, files)
 	if !ready {
 		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "asset is not ready for issuance — some checks have failed",
 			"ready":   false,
 			"assetId": id,
 			"checks":  checks,
@@ -943,7 +1042,7 @@ func (s *Server) cors() gin.HandlerFunc {
 		if origin == s.frontendOrigin {
 			c.Header("Access-Control-Allow-Origin", origin)
 			c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type")
-			c.Header("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS")
+			c.Header("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
 		}
 		if c.Request.Method == http.MethodOptions {
 			c.AbortWithStatus(http.StatusNoContent)

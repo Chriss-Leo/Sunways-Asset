@@ -9,7 +9,7 @@ import {
   revenueVaultAbi,
   sunwaysContracts,
 } from "@/contracts/sunways";
-import { contractRows, mockStation, portfolioMetrics } from "@/data/mockDashboard";
+import { contractRows } from "@/data/mockDashboard";
 import { getDashboardSummary } from "@/services/dashboard";
 
 const stationId = BigInt(1);
@@ -19,29 +19,15 @@ function shortAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
-function formatTokenAmount(value: unknown, suffix: string) {
-  if (typeof value !== "bigint") {
-    return null;
-  }
-  const formatted = Number(formatEther(value)).toLocaleString(undefined, {
-    maximumFractionDigits: 2,
-  });
-  return `${formatted} ${suffix}`;
-}
-
 function formatWeiString(value: string | undefined) {
-  if (!value) {
-    return null;
-  }
+  if (!value) return null;
   return `${Number(formatEther(BigInt(value))).toLocaleString(undefined, {
     maximumFractionDigits: 2,
   })} ETH`;
 }
 
 function formatTokenString(value: string | undefined, suffix: string) {
-  if (!value) {
-    return null;
-  }
+  if (!value) return null;
   return `${Number(formatEther(BigInt(value))).toLocaleString(undefined, {
     maximumFractionDigits: 2,
   })} ${suffix}`;
@@ -49,13 +35,6 @@ function formatTokenString(value: string | undefined, suffix: string) {
 
 function hasNonZero(value: string | undefined) {
   return Boolean(value && value !== "0");
-}
-
-function formatCount(value: unknown) {
-  if (typeof value !== "bigint") {
-    return null;
-  }
-  return value.toLocaleString();
 }
 
 const toneClass = {
@@ -87,7 +66,7 @@ export function PortfolioOverview() {
     query,
   });
   const stationOwner =
-    typeof ownerQuery.data === "string" ? ownerQuery.data : mockStation.owner;
+    typeof ownerQuery.data === "string" ? ownerQuery.data : undefined;
 
   const revenueQuery = useReadContract({
     address: sunwaysContracts.RevenueVault.address,
@@ -100,69 +79,89 @@ export function PortfolioOverview() {
     address: sunwaysContracts.CarbonCreditToken.address,
     abi: carbonCreditTokenAbi,
     functionName: "balanceOf",
-    args: [stationOwner],
-    query,
+    args: stationOwner ? [stationOwner] : undefined,
+    query: { ...query, enabled: query.enabled && Boolean(stationOwner) },
   });
   const certificateQuery = useReadContract({
     address: sunwaysContracts.GreenCertificate.address,
     abi: greenCertificateAbi,
     functionName: "balanceOf",
-    args: [stationOwner, certificateId],
-    query,
+    args: stationOwner ? [stationOwner, certificateId] : undefined,
+    query: { ...query, enabled: query.enabled && Boolean(stationOwner) },
   });
 
-  const metrics = [
+  type Metric = {
+    label: string;
+    value: string;
+    detail: string;
+    tone: "emerald" | "sky" | "lime" | "amber";
+    source: string | null;
+  };
+
+  const backendStations = summaryQuery.data && summaryQuery.data.stations > 0;
+  const backendRevenue = hasNonZero(summaryQuery.data?.totalRevenueWei);
+  const backendCarbon = hasNonZero(summaryQuery.data?.totalCarbonAmount);
+  const backendCerts = hasNonZero(summaryQuery.data?.totalCertificates);
+
+  const metrics: Metric[] = [
     {
-      ...portfolioMetrics[0],
-      value:
-        summaryQuery.data && summaryQuery.data.stations > 0
-          ? summaryQuery.data.stations.toLocaleString()
-          : portfolioMetrics[0].value,
-      source:
-        summaryQuery.data && summaryQuery.data.stations > 0
-          ? t("portfolio.backend")
-          : typeof ownerQuery.data === "string"
-            ? t("portfolio.onChain")
-            : t("portfolio.mock"),
+      label: t("portfolio.powerStations"),
+      value: backendStations
+        ? summaryQuery.data!.stations.toLocaleString()
+        : "—",
+      detail: t("portfolio.mwTracked", { capacity: summaryQuery.data?.totalCapacityKw ?? "0" }),
+      tone: "emerald",
+      source: backendStations
+        ? t("portfolio.backend")
+        : typeof ownerQuery.data === "string"
+          ? t("portfolio.onChain")
+          : null,
     },
     {
-      ...portfolioMetrics[1],
+      label: t("portfolio.revenuePool"),
       value:
         formatWeiString(summaryQuery.data?.totalRevenueWei) ??
-        formatTokenAmount(revenueQuery.data, "ETH") ??
-        portfolioMetrics[1].value,
-      source:
-        hasNonZero(summaryQuery.data?.totalRevenueWei)
-          ? t("portfolio.backend")
-          : typeof revenueQuery.data === "bigint"
-            ? t("portfolio.onChain")
-            : t("portfolio.mock"),
+        (typeof revenueQuery.data === "bigint"
+          ? `${Number(formatEther(revenueQuery.data)).toLocaleString(undefined, { maximumFractionDigits: 2 })} ETH`
+          : null) ??
+        "—",
+      detail: t("portfolio.mockMonthlySettlement"),
+      tone: "sky",
+      source: backendRevenue
+        ? t("portfolio.backend")
+        : typeof revenueQuery.data === "bigint"
+          ? t("portfolio.onChain")
+          : null,
     },
     {
-      ...portfolioMetrics[2],
+      label: t("portfolio.carbonCredits"),
       value:
         formatTokenString(summaryQuery.data?.totalCarbonAmount, "SWC") ??
-        formatTokenAmount(carbonQuery.data, "SWC") ??
-        portfolioMetrics[2].value,
-      source:
-        hasNonZero(summaryQuery.data?.totalCarbonAmount)
-          ? t("portfolio.backend")
-          : typeof carbonQuery.data === "bigint"
-            ? t("portfolio.onChain")
-            : t("portfolio.mock"),
+        (typeof carbonQuery.data === "bigint"
+          ? `${Number(formatEther(carbonQuery.data)).toLocaleString(undefined, { maximumFractionDigits: 2 })} SWC`
+          : null) ??
+        "—",
+      detail: t("portfolio.pendingOracle"),
+      tone: "lime",
+      source: backendCarbon
+        ? t("portfolio.backend")
+        : typeof carbonQuery.data === "bigint"
+          ? t("portfolio.onChain")
+          : null,
     },
     {
-      ...portfolioMetrics[3],
-      value:
-        hasNonZero(summaryQuery.data?.totalCertificates)
-          ? Number(summaryQuery.data?.totalCertificates).toLocaleString()
-          : formatCount(certificateQuery.data) ?? portfolioMetrics[3].value,
-      source:
-        hasNonZero(summaryQuery.data?.totalCertificates)
-          ? t("portfolio.backend")
-          : typeof certificateQuery.data === "bigint"
-            ? t("portfolio.onChain")
-            : t("portfolio.mock"),
+      label: t("portfolio.greenCertificates"),
+      value: backendCerts
+        ? Number(summaryQuery.data!.totalCertificates).toLocaleString()
+        : (typeof certificateQuery.data === "bigint" ? certificateQuery.data.toLocaleString() : null) ??
+          "—",
+      detail: t("portfolio.issuanceBatch"),
+      tone: "amber",
+      source: backendCerts
+        ? t("portfolio.backend")
+        : typeof certificateQuery.data === "bigint"
+          ? t("portfolio.onChain")
+          : null,
     },
   ];
 
@@ -174,11 +173,13 @@ export function PortfolioOverview() {
             className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm"
             key={metric.label}
           >
-            <div
-              className={`inline-flex min-h-7 items-center rounded-full border px-2.5 text-xs font-semibold ${toneClass[metric.tone]}`}
-            >
-              {metric.source}
-            </div>
+            {metric.source && (
+              <div
+                className={`inline-flex min-h-7 items-center rounded-full border px-2.5 text-xs font-semibold ${toneClass[metric.tone]}`}
+              >
+                {metric.source}
+              </div>
+            )}
             <p className="mt-4 text-sm font-medium text-zinc-500">
               {metric.label}
             </p>

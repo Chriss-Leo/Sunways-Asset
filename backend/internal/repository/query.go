@@ -99,6 +99,29 @@ func (s *Store) GetAssetDraft(id uint) (AssetDraft, error) {
 	return asset, err
 }
 
+func (s *Store) UpdateAssetDraft(id uint, updates map[string]any) (AssetDraft, error) {
+	var asset AssetDraft
+	err := s.db.First(&asset, id).Error
+	if err != nil {
+		return asset, err
+	}
+	if err := s.db.Model(&asset).Updates(updates).Error; err != nil {
+		return asset, err
+	}
+	return asset, nil
+}
+
+func (s *Store) DeleteAssetDraft(id uint) error {
+	result := s.db.Where("id = ? AND status IN ?", id, []string{"draft", "rejected"}).Delete(&AssetDraft{})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
 var validStatusTransitions = map[string][]string{
 	"draft":          {"submitted"},
 	"submitted":      {"approved", "rejected", "draft"},
@@ -221,6 +244,10 @@ func (s *Store) UpsertStation(station Station) error {
 	}).Create(&station).Error
 }
 
+func (s *Store) UpdateStationChainStatus(chainID int64, stationID uint64, status string) error {
+	return s.db.Model(&Station{}).Where("chain_id = ? AND station_id = ?", chainID, stationID).Update("status", status).Error
+}
+
 func (s *Store) CreateRevenueDeposit(deposit RevenueDeposit) error {
 	return s.db.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "tx_hash"}, {Name: "log_index"}},
@@ -267,6 +294,13 @@ func (s *Store) CreateGreenCertificateIssuance(issuance GreenCertificateIssuance
 		Columns:   []clause.Column{{Name: "tx_hash"}, {Name: "log_index"}},
 		DoNothing: true,
 	}).Create(&issuance).Error
+}
+
+func (s *Store) CreateGreenCertificateRetirement(retirement GreenCertificateRetirement) error {
+	return s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "tx_hash"}, {Name: "log_index"}},
+		DoNothing: true,
+	}).Create(&retirement).Error
 }
 
 func (s *Store) UpsertIndexerState(state IndexerState) error {
@@ -404,6 +438,15 @@ func (s *Store) ListGreenCertificateIssuances(limit int) ([]GreenCertificateIssu
 	return items, err
 }
 
+func (s *Store) ListGreenCertificateRetirements(limit int) ([]GreenCertificateRetirement, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 100
+	}
+	var items []GreenCertificateRetirement
+	err := s.db.Order("block_number desc, log_index desc").Limit(limit).Find(&items).Error
+	return items, err
+}
+
 func (s *Store) ListUserAssetSummaries(limit int) ([]UserAssetSummary, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 100
@@ -448,19 +491,35 @@ func (s *Store) DashboardSummary() (DashboardSummary, error) {
 	if err := s.db.Find(&certificates).Error; err != nil {
 		return DashboardSummary{}, err
 	}
+	var certRetirements []GreenCertificateRetirement
+	if err := s.db.Find(&certRetirements).Error; err != nil {
+		return DashboardSummary{}, err
+	}
+	var carbonRetirements []CarbonCreditRetirement
+	if err := s.db.Find(&carbonRetirements).Error; err != nil {
+		return DashboardSummary{}, err
+	}
+
+	totalCertIssued, _ := new(big.Int).SetString(sumStrings(mapSlice(certificates, func(v GreenCertificateIssuance) string { return v.Amount })), 10)
+	totalCertRetired, _ := new(big.Int).SetString(sumStrings(mapSlice(certRetirements, func(v GreenCertificateRetirement) string { return v.Amount })), 10)
+	totalCerts := new(big.Int).Sub(totalCertIssued, totalCertRetired).String()
+
+	totalCarbonIssued, _ := new(big.Int).SetString(sumStrings(mapSlice(carbon, func(v CarbonCreditIssuance) string { return v.Amount })), 10)
+	totalCarbonRetired, _ := new(big.Int).SetString(sumStrings(mapSlice(carbonRetirements, func(v CarbonCreditRetirement) string { return v.Amount })), 10)
+	totalCarbon := new(big.Int).Sub(totalCarbonIssued, totalCarbonRetired).String()
 
 	return DashboardSummary{
 		Stations:          stationCount,
 		TotalCapacityKW:   sumStrings(mapSlice(stations, func(v Station) string { return v.CapacityKW })),
 		TotalRevenueWei:   sumStrings(mapSlice(deposits, func(v RevenueDeposit) string { return v.AmountWei })),
-		TotalCarbonAmount: sumStrings(mapSlice(carbon, func(v CarbonCreditIssuance) string { return v.Amount })),
-		TotalCertificates: sumStrings(mapSlice(certificates, func(v GreenCertificateIssuance) string { return v.Amount })),
+		TotalCarbonAmount: totalCarbon,
+		TotalCertificates: totalCerts,
 	}, nil
 }
 
 func (s *Store) RebuildUserAssetSummary(chainID int64) error {
 	var accounts []string
-	for _, model := range []any{&Station{}, &RevenueDeposit{}, &CarbonCreditIssuance{}, &GreenCertificateIssuance{}} {
+	for _, model := range []any{&Station{}, &RevenueDeposit{}, &CarbonCreditIssuance{}, &CarbonCreditRetirement{}, &GreenCertificateIssuance{}, &GreenCertificateRetirement{}} {
 		switch model.(type) {
 		case *Station:
 			var rows []Station
@@ -486,8 +545,24 @@ func (s *Store) RebuildUserAssetSummary(chainID int64) error {
 			for _, row := range rows {
 				accounts = append(accounts, row.Account)
 			}
+		case *CarbonCreditRetirement:
+			var rows []CarbonCreditRetirement
+			if err := s.db.Find(&rows).Error; err != nil {
+				return err
+			}
+			for _, row := range rows {
+				accounts = append(accounts, row.Account)
+			}
 		case *GreenCertificateIssuance:
 			var rows []GreenCertificateIssuance
+			if err := s.db.Find(&rows).Error; err != nil {
+				return err
+			}
+			for _, row := range rows {
+				accounts = append(accounts, row.Account)
+			}
+		case *GreenCertificateRetirement:
+			var rows []GreenCertificateRetirement
 			if err := s.db.Find(&rows).Error; err != nil {
 				return err
 			}
@@ -527,14 +602,31 @@ func (s *Store) rebuildAccountSummary(chainID int64, account string) error {
 	if err := s.db.Where("account = ?", account).Find(&certificates).Error; err != nil {
 		return err
 	}
+	var certRetirements []GreenCertificateRetirement
+	if err := s.db.Where("account = ?", account).Find(&certRetirements).Error; err != nil {
+		return err
+	}
+	var carbonRetirements []CarbonCreditRetirement
+	if err := s.db.Where("account = ?", account).Find(&carbonRetirements).Error; err != nil {
+		return err
+	}
+
+	certIssued, _ := new(big.Int).SetString(sumStrings(mapSlice(certificates, func(v GreenCertificateIssuance) string { return v.Amount })), 10)
+	certRetired, _ := new(big.Int).SetString(sumStrings(mapSlice(certRetirements, func(v GreenCertificateRetirement) string { return v.Amount })), 10)
+	certBalance := new(big.Int).Sub(certIssued, certRetired).String()
+
+	carbonIssued, _ := new(big.Int).SetString(sumStrings(mapSlice(carbon, func(v CarbonCreditIssuance) string { return v.Amount })), 10)
+	carbonRetired, _ := new(big.Int).SetString(sumStrings(mapSlice(carbonRetirements, func(v CarbonCreditRetirement) string { return v.Amount })), 10)
+	carbonBalance := new(big.Int).Sub(carbonIssued, carbonRetired).String()
+
 	summary := UserAssetSummary{
 		ChainID:               chainID,
 		Account:               account,
 		StationCount:          stationCount,
 		ClaimableRevenueWei:   sumStrings(mapSlice(deposits, func(v RevenueDeposit) string { return v.AmountWei })),
 		TotalRevenueWei:       sumStrings(mapSlice(deposits, func(v RevenueDeposit) string { return v.AmountWei })),
-		CarbonCreditBalance:   sumStrings(mapSlice(carbon, func(v CarbonCreditIssuance) string { return v.Amount })),
-		GreenCertificateCount: sumStrings(mapSlice(certificates, func(v GreenCertificateIssuance) string { return v.Amount })),
+		CarbonCreditBalance:   carbonBalance,
+		GreenCertificateCount: certBalance,
 	}
 	return s.db.Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "chain_id"}, {Name: "account"}},

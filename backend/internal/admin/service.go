@@ -22,6 +22,7 @@ var ErrDisabled = errors.New("admin transaction service is not configured")
 
 const powerStationABI = `[
   {"type":"function","name":"registerStation","stateMutability":"nonpayable","inputs":[{"name":"owner","type":"address"},{"name":"name","type":"string"},{"name":"region","type":"string"},{"name":"capacityKw","type":"uint256"},{"name":"commissionedAt","type":"uint64"},{"name":"metadataURI","type":"string"}],"outputs":[{"name":"stationId","type":"uint256"}]},
+  {"type":"function","name":"updateStationStatus","stateMutability":"nonpayable","inputs":[{"name":"stationId","type":"uint256"},{"name":"status","type":"uint8"}],"outputs":[]},
   {"type":"event","name":"StationRegistered","inputs":[{"name":"stationId","type":"uint256","indexed":true},{"name":"owner","type":"address","indexed":true},{"name":"operator","type":"address","indexed":true},{"name":"metadataURI","type":"string","indexed":false},{"name":"capacityKw","type":"uint256","indexed":false}]}
 ]`
 
@@ -30,11 +31,13 @@ const revenueABI = `[
 ]`
 
 const carbonABI = `[
-  {"type":"function","name":"mintCarbonCredits","stateMutability":"nonpayable","inputs":[{"name":"account","type":"address"},{"name":"amount","type":"uint256"},{"name":"stationId","type":"uint256"},{"name":"evidenceURI","type":"string"}],"outputs":[]}
+  {"type":"function","name":"mintCarbonCredits","stateMutability":"nonpayable","inputs":[{"name":"account","type":"address"},{"name":"amount","type":"uint256"},{"name":"stationId","type":"uint256"},{"name":"evidenceURI","type":"string"}],"outputs":[]},
+  {"type":"function","name":"burn","stateMutability":"nonpayable","inputs":[{"name":"amount","type":"uint256"}],"outputs":[]}
 ]`
 
 const certificateABI = `[
-  {"type":"function","name":"issueCertificate","stateMutability":"nonpayable","inputs":[{"name":"account","type":"address"},{"name":"stationId","type":"uint256"},{"name":"amount","type":"uint256"},{"name":"certificateType","type":"string"},{"name":"period","type":"string"},{"name":"evidenceURI","type":"string"}],"outputs":[{"name":"certificateId","type":"uint256"}]}
+  {"type":"function","name":"issueCertificate","stateMutability":"nonpayable","inputs":[{"name":"account","type":"address"},{"name":"stationId","type":"uint256"},{"name":"amount","type":"uint256"},{"name":"certificateType","type":"string"},{"name":"period","type":"string"},{"name":"evidenceURI","type":"string"}],"outputs":[{"name":"certificateId","type":"uint256"}]},
+  {"type":"function","name":"burn","stateMutability":"nonpayable","inputs":[{"name":"account","type":"address"},{"name":"id","type":"uint256"},{"name":"amount","type":"uint256"}],"outputs":[]}
 ]`
 
 type Service struct {
@@ -113,6 +116,20 @@ type IssueCertificateRequest struct {
 	CertificateType string `json:"certificateType"`
 	Period          string `json:"period"`
 	EvidenceURI     string `json:"evidenceUri"`
+}
+
+type BurnCarbonRequest struct {
+	Amount string `json:"amount"`
+}
+
+type BurnCertificateRequest struct {
+	CertificateID uint64 `json:"certificateId"`
+	Amount        string `json:"amount"`
+}
+
+type UpdateStationChainStatusRequest struct {
+	StationID uint64 `json:"stationId"`
+	Status    uint8  `json:"status"`
 }
 
 func (s *Service) RegisterStation(ctx context.Context, req RegisterStationRequest) (common.Hash, error) {
@@ -207,6 +224,47 @@ func (s *Service) IssueCertificate(ctx context.Context, req IssueCertificateRequ
 		return common.Hash{}, err
 	}
 	return s.send(ctx, s.chain.Contracts.GreenCertificate, big.NewInt(0), data)
+}
+
+func (s *Service) BurnCarbon(ctx context.Context, req BurnCarbonRequest) (common.Hash, error) {
+	amount, ok := new(big.Int).SetString(req.Amount, 10)
+	if !ok {
+		return common.Hash{}, errors.New("invalid amount")
+	}
+	data, err := s.abis["CarbonCreditToken"].Pack("burn", amount)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return s.send(ctx, s.chain.Contracts.CarbonCreditToken, big.NewInt(0), data)
+}
+
+func (s *Service) BurnCertificate(ctx context.Context, req BurnCertificateRequest) (common.Hash, error) {
+	amount, ok := new(big.Int).SetString(req.Amount, 10)
+	if !ok {
+		return common.Hash{}, errors.New("invalid amount")
+	}
+	data, err := s.abis["GreenCertificate"].Pack(
+		"burn",
+		s.from,
+		new(big.Int).SetUint64(req.CertificateID),
+		amount,
+	)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return s.send(ctx, s.chain.Contracts.GreenCertificate, big.NewInt(0), data)
+}
+
+func (s *Service) UpdateStationChainStatus(ctx context.Context, req UpdateStationChainStatusRequest) (common.Hash, error) {
+	data, err := s.abis["PowerStationNFT"].Pack(
+		"updateStationStatus",
+		new(big.Int).SetUint64(req.StationID),
+		req.Status,
+	)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return s.send(ctx, s.chain.Contracts.PowerStationNFT, big.NewInt(0), data)
 }
 
 func (s *Service) send(ctx context.Context, to common.Address, value *big.Int, data []byte) (common.Hash, error) {

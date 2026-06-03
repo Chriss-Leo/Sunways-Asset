@@ -1,5 +1,5 @@
 import type { FormEvent, ReactNode } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAccount } from "wagmi";
 import { useT } from "@/i18n";
@@ -9,12 +9,14 @@ import {
   createAssetFile,
   createOrganization,
   createOrganizationMember,
+  deleteAssetDraft,
   generateAssetMetadata,
   getAssetDrafts,
   getAssetFiles,
   getOrganizations,
   getPlatformAuditLogs,
   issueAssetDraft,
+  updateAssetDraft,
   updateAssetDraftStatus,
 } from "@/services/dashboard";
 
@@ -219,6 +221,14 @@ export function PlatformWorkspace() {
     originalName: "station-001.json",
     purpose: "NFT metadata",
   });
+
+  useEffect(() => {
+    if (firstAssetId > 0) {
+      setFile((prev) => ({ ...prev, assetDraftId: String(firstAssetId) }));
+    }
+  }, [firstAssetId]);
+  const [pipelineError, setPipelineError] = useState<{ message: string } | null>(null);
+  const [showCheckDetails, setShowCheckDetails] = useState(false);
   const [checkResult, setCheckResult] = useState<{
     id: number;
     ready: boolean;
@@ -311,6 +321,7 @@ export function PlatformWorkspace() {
   const checkMutation = useMutation({
     mutationFn: (id: number) => checkAssetIssuanceReady(id),
     onSuccess: (data) => {
+      setShowCheckDetails(false);
       setCheckResult({
         id: data.assetId,
         ready: data.ready,
@@ -334,6 +345,49 @@ export function PlatformWorkspace() {
       ]);
     },
   });
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState({
+    name: "", region: "", capacityKw: "", country: "",
+    description: "", address: "", expectedAnnualKwh: "", expectedRevenue: "",
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => deleteAssetDraft(id),
+    onSuccess: () => {
+      setConfirmDeleteId(null);
+      invalidatePlatform();
+    },
+    onError: () => {
+      setConfirmDeleteId(null);
+    },
+  });
+  const editMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Record<string, string> }) =>
+      updateAssetDraft(id, data),
+    onSuccess: () => {
+      setEditingId(null);
+      invalidatePlatform();
+    },
+    onError: () => {
+      setEditingId(null);
+    },
+  });
+
+  useEffect(() => {
+    const sources = [
+      submitMutation.error, approveMutation.error, rejectMutation.error,
+      resubmitMutation.error, metadataMutation.error, checkMutation.error,
+      issueMutation.error, editMutation.error, deleteMutation.error,
+    ];
+    const first = sources.find(Boolean);
+    setPipelineError(first ? { message: first.message } : null);
+  }, [
+    submitMutation.error, approveMutation.error, rejectMutation.error,
+    resubmitMutation.error, metadataMutation.error, checkMutation.error,
+    issueMutation.error, editMutation.error, deleteMutation.error,
+  ]);
+
   const fileMutation = useMutation({
     mutationFn: () =>
       createAssetFile({
@@ -543,74 +597,125 @@ export function PlatformWorkspace() {
         </Panel>
       </div>
 
-      {checkResult ? (
-        <Panel title={t("platform.preIssuanceCheck", { id: checkResult.id })}>
-          <div className="space-y-3">
-            <p className="text-sm">
-              <span className="font-semibold">{t("platform.overall")}</span>{" "}
-              <span
-                className={
-                  checkResult.ready
-                    ? "font-semibold text-emerald-700"
-                    : "font-semibold text-red-700"
-                }
-              >
-                {checkResult.ready ? t("platform.readyForIssuance") : t("platform.notReady")}
-              </span>
-            </p>
-            <div className="space-y-2">
-              {checkResult.checks.map((check) => (
-                <div
-                  className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${
-                    check.passed
-                      ? "border-emerald-200 bg-emerald-50"
-                      : "border-red-200 bg-red-50"
-                  }`}
-                  key={check.check}
-                >
-                  <span className="font-semibold">
-                    {check.passed ? t("platform.passed") : t("platform.failed")}
-                  </span>
-                  <span className="font-medium">{check.check}</span>
-                  {check.message ? (
-                    <span className="text-xs text-zinc-500">
-                      - {check.message}
-                    </span>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          </div>
-        </Panel>
-      ) : null}
-
-      {issueResult ? (
-        <Panel title={t("platform.issuanceResult", { id: issueResult.assetId })}>
-          <div className="grid gap-3 text-sm sm:grid-cols-2">
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2">
-              <p className="text-xs font-semibold uppercase text-emerald-700">
-                {t("platform.stationMinted")}
-              </p>
-              <p className="mt-1 font-mono text-emerald-950">
-                #{issueResult.stationId}
-              </p>
-            </div>
-            <div className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2">
-              <p className="text-xs font-semibold uppercase text-zinc-500">
-                {t("platform.transaction")}
-              </p>
-              <p className="mt-1 break-all font-mono text-xs text-zinc-700">
-                {issueResult.txHash}
-              </p>
-            </div>
-          </div>
-        </Panel>
-      ) : null}
-
-      <div className="grid gap-5 xl:grid-cols-[1.4fr_0.6fr]">
+      <div className="grid gap-5 xl:grid-cols-[5fr_2fr]">
         <Panel title={t("platform.assetPipeline")}>
+          {checkResult ? (
+            <div
+              className={`mb-4 rounded-md border px-4 py-3 ${
+                checkResult.ready
+                  ? "border-emerald-200 bg-emerald-50/70"
+                  : "border-red-200 bg-red-50/70"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="font-semibold">
+                    {t("platform.preIssuanceCheck", { id: checkResult.id })}
+                  </span>
+                  <span className="text-zinc-400">·</span>
+                  <span
+                    className={
+                      checkResult.ready
+                        ? "font-semibold text-emerald-700"
+                        : "font-semibold text-red-700"
+                    }
+                  >
+                    {checkResult.ready ? t("platform.readyForIssuance") : t("platform.notReady")}
+                  </span>
+                  <span className="text-zinc-400">·</span>
+                  <span className="text-xs text-zinc-500">
+                    {checkResult.checks.filter((c) => c.passed).length}/{checkResult.checks.length} {t("platform.passed").toLowerCase()}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    className="text-xs font-medium text-zinc-500 hover:text-zinc-900 transition"
+                    onClick={() => setShowCheckDetails((prev) => !prev)}
+                    type="button"
+                  >
+                    {showCheckDetails ? t("platform.collapse") : t("platform.details")}
+                  </button>
+                  <button
+                    className="text-xs text-zinc-400 hover:text-zinc-700 transition"
+                    onClick={() => { setCheckResult(null); setShowCheckDetails(false); }}
+                    type="button"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+              {showCheckDetails ? (
+                <div className="mt-3 space-y-1.5">
+                  {checkResult.checks.map((check) => (
+                    <div key={check.check}>
+                      <div
+                        className={`flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs ${
+                          check.passed
+                            ? "border-emerald-200 bg-white"
+                            : "border-red-200 bg-white"
+                        }`}
+                      >
+                        <span className={`font-semibold ${check.passed ? "text-emerald-700" : "text-red-700"}`}>
+                          {check.passed ? "✓" : "✗"} {check.check}
+                        </span>
+                        {check.message ? (
+                          <span className="text-zinc-500">— {check.message}</span>
+                        ) : null}
+                      </div>
+                      {!check.passed && check.check === "has_files" ? (
+                        <p className="mt-1 ml-4 text-xs text-zinc-400">
+                          {t("platform.hasFilesHint")}
+                        </p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {issueResult ? (
+            <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50/70 px-4 py-3">
+              <div className="flex items-center gap-2 text-sm min-w-0">
+                <span className="font-semibold text-emerald-800">
+                  {t("platform.issuanceResult", { id: issueResult.assetId })}
+                </span>
+                <span className="text-zinc-400">·</span>
+                <span className="font-mono text-xs text-emerald-700">
+                  {t("platform.stationMinted")}: #{issueResult.stationId}
+                </span>
+                <span className="text-zinc-400 hidden sm:inline">·</span>
+                <span className="font-mono text-xs text-zinc-500 truncate hidden sm:inline">
+                  {issueResult.txHash.slice(0, 18)}...
+                </span>
+              </div>
+              <button
+                className="shrink-0 text-xs text-zinc-400 hover:text-zinc-700 transition"
+                onClick={() => setIssueResult(null)}
+                type="button"
+              >
+                ×
+              </button>
+            </div>
+          ) : null}
+
+          {pipelineError ? (
+            <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-red-200 bg-red-50/70 px-4 py-2.5">
+              <p className="text-sm text-red-700 truncate min-w-0">
+                {pipelineError.message}
+              </p>
+              <button
+                className="shrink-0 text-xs text-red-400 hover:text-red-700 transition"
+                onClick={() => setPipelineError(null)}
+                type="button"
+              >
+                ×
+              </button>
+            </div>
+          ) : null}
+
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] text-left text-sm">
+            <table className="w-full min-w-[780px] text-left text-sm">
               <thead className="border-b border-zinc-200 text-xs uppercase text-zinc-500">
                 <tr>
                   <th className="py-3 pr-3">{t("platform.id")}</th>
@@ -619,7 +724,7 @@ export function PlatformWorkspace() {
                   <th className="py-3 pr-3">{t("platform.region")}</th>
                   <th className="py-3 pr-3">{t("platform.capacity")}</th>
                   <th className="py-3 pr-3">{t("common.status")}</th>
-                  <th className="py-3 pr-3">{t("platform.actions")}</th>
+                  <th className="w-36 py-3 pr-3">{t("platform.actions")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100">
@@ -632,6 +737,7 @@ export function PlatformWorkspace() {
                     canCheck && Boolean(item.metadataUri) && !item.stationId;
 
                   return (
+                    <>
                     <tr key={item.id}>
                       <td className="py-3 pr-3 font-mono">#{item.id}</td>
                       <td className="py-3 pr-3 font-medium text-zinc-950">
@@ -652,7 +758,7 @@ export function PlatformWorkspace() {
                       <td className="py-3 pr-3">
                         {statusBadge(item.status, t(`platform.status.${item.status}`))}
                       </td>
-                      <td className="py-3 pr-3">
+                      <td className="w-36 py-3 pr-3">
                         <div className="flex flex-wrap gap-1">
                           {item.status === "draft" ? (
                             <button
@@ -728,15 +834,115 @@ export function PlatformWorkspace() {
                                 : t("platform.issue")}
                             </button>
                           ) : null}
+                          {item.status !== "onchain" ? (
+                            <button
+                              className="rounded-md border border-zinc-300 px-2 py-1 text-xs font-semibold text-zinc-600 transition hover:border-zinc-900 hover:text-zinc-900"
+                              onClick={() => {
+                                setConfirmDeleteId(null);
+                                setEditingId(item.id);
+                                setEditForm({
+                                  name: item.name, region: item.region,
+                                  capacityKw: item.capacityKw, country: item.country,
+                                  description: item.description, address: item.address,
+                                  expectedAnnualKwh: item.expectedAnnualKwh,
+                                  expectedRevenue: item.expectedRevenue,
+                                });
+                              }}
+                              type="button"
+                            >
+                              {editMutation.isPending && editMutation.variables?.id === item.id
+                                ? t("admin.saving")
+                                : t("platform.edit")}
+                            </button>
+                          ) : null}
+                          {item.status !== "onchain" ? (
+                            confirmDeleteId === item.id ? (
+                              <button
+                                className="rounded-md border border-red-500 bg-red-500 px-2 py-1 text-xs font-semibold text-white transition hover:bg-red-600"
+                                onClick={() => { setEditingId(null); deleteMutation.mutate(item.id); }}
+                                type="button"
+                              >
+                                {t("platform.confirmDelete")}
+                              </button>
+                            ) : (
+                              <button
+                                className="rounded-md border border-zinc-300 px-2 py-1 text-xs font-semibold text-zinc-400 transition hover:border-red-400 hover:text-red-600"
+                                onClick={() => { setEditingId(null); setConfirmDeleteId(item.id); }}
+                                type="button"
+                              >
+                                {t("platform.delete")}
+                              </button>
+                            )
+                          ) : null}
                         </div>
-                        {issueMutation.error &&
-                        issueMutation.variables === item.id ? (
-                          <p className="mt-2 max-w-72 text-xs text-red-700">
-                            {issueMutation.error.message}
-                          </p>
-                        ) : null}
                       </td>
                     </tr>
+                    {editingId === item.id ? (
+                      <tr key={`edit-${item.id}`}>
+                        <td className="bg-zinc-50 py-4" colSpan={7}>
+                          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                            <Field
+                              label={t("platform.assetName")}
+                              onChange={(v) => setEditForm((p) => ({ ...p, name: v }))}
+                              value={editForm.name}
+                            />
+                            <Field
+                              label={t("platform.description")}
+                              onChange={(v) => setEditForm((p) => ({ ...p, description: v }))}
+                              value={editForm.description}
+                            />
+                            <Field
+                              label={t("platform.country")}
+                              onChange={(v) => setEditForm((p) => ({ ...p, country: v }))}
+                              value={editForm.country}
+                            />
+                            <Field
+                              label={t("admin.region")}
+                              onChange={(v) => setEditForm((p) => ({ ...p, region: v }))}
+                              value={editForm.region}
+                            />
+                            <Field
+                              label={t("platform.address")}
+                              onChange={(v) => setEditForm((p) => ({ ...p, address: v }))}
+                              value={editForm.address}
+                            />
+                            <Field
+                              label={t("admin.capacityKw")}
+                              onChange={(v) => setEditForm((p) => ({ ...p, capacityKw: v }))}
+                              value={editForm.capacityKw}
+                            />
+                            <Field
+                              label={t("platform.expectedAnnualKwh")}
+                              onChange={(v) => setEditForm((p) => ({ ...p, expectedAnnualKwh: v }))}
+                              value={editForm.expectedAnnualKwh}
+                            />
+                            <Field
+                              label={t("platform.expectedRevenue")}
+                              onChange={(v) => setEditForm((p) => ({ ...p, expectedRevenue: v }))}
+                              value={editForm.expectedRevenue}
+                            />
+                            <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-4">
+                              <button
+                                className="h-10 rounded-md bg-zinc-950 px-4 text-sm font-semibold text-white hover:bg-zinc-800 disabled:bg-zinc-400"
+                                disabled={editMutation.isPending}
+                                onClick={() => editMutation.mutate({ id: item.id, data: editForm })}
+                                type="button"
+                              >
+                                {editMutation.isPending ? t("admin.saving") : t("platform.save")}
+                              </button>
+                              <button
+                                className="h-10 rounded-md border border-zinc-300 px-4 text-sm font-semibold text-zinc-600 hover:border-zinc-900"
+                                onClick={() => setEditingId(null)}
+                                type="button"
+                              >
+                                {t("platform.cancel")}
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : null}
+                    </>
                   );
                 })}
               </tbody>
@@ -749,46 +955,48 @@ export function PlatformWorkspace() {
           ) : null}
         </Panel>
 
-        <Panel title={t("platform.recentFilesAudit")}>
-          <div className="space-y-5">
-            <div>
-              <p className="text-xs font-semibold uppercase text-zinc-500">
-                {t("platform.files")}
-              </p>
-              <div className="mt-2 space-y-2">
-                {(files.data?.items ?? []).slice(0, 5).map((item) => (
-                  <div
-                    className="rounded-md border border-zinc-200 px-3 py-2 text-sm"
-                    key={item.id}
-                  >
-                    <p className="font-medium text-zinc-950">
-                      {item.originalName || item.category}
-                    </p>
-                    <p className="mt-1 font-mono text-xs text-zinc-500">
-                      {shortValue(item.cid || item.ipfsUri)}
-                    </p>
-                  </div>
-                ))}
-              </div>
+        <div className="space-y-5">
+          <Panel title={t("platform.files")}>
+            <div className="space-y-2">
+              {(files.data?.items ?? []).slice(0, 6).map((item) => (
+                <div
+                  className="rounded-md border border-zinc-200 px-3 py-2 text-sm"
+                  key={item.id}
+                >
+                  <p className="font-medium text-zinc-950 truncate">
+                    {item.originalName || item.category}
+                  </p>
+                  <p className="mt-1 font-mono text-xs text-zinc-500">
+                    {shortValue(item.cid || item.ipfsUri)}
+                  </p>
+                </div>
+              ))}
+              {(files.data?.items ?? []).length === 0 ? (
+                <p className="py-4 text-center text-xs text-zinc-400">
+                  {t("platform.noFiles")}
+                </p>
+              ) : null}
             </div>
-            <div>
-              <p className="text-xs font-semibold uppercase text-zinc-500">
-                {t("platform.audit")}
-              </p>
-              <div className="mt-2 space-y-2">
-                {(auditLogs.data?.items ?? []).slice(0, 5).map((item) => (
-                  <div
-                    className="rounded-md border border-zinc-200 px-3 py-2 text-sm"
-                    key={item.id}
-                  >
-                    <p className="font-medium text-zinc-950">{item.action}</p>
-                    <p className="mt-1 text-xs text-zinc-500">{item.summary}</p>
-                  </div>
-                ))}
-              </div>
+          </Panel>
+          <Panel title={t("platform.audit")}>
+            <div className="space-y-2">
+              {(auditLogs.data?.items ?? []).slice(0, 6).map((item) => (
+                <div
+                  className="rounded-md border border-zinc-200 px-3 py-2 text-sm"
+                  key={item.id}
+                >
+                  <p className="font-medium text-zinc-950 truncate">{item.action}</p>
+                  <p className="mt-1 text-xs text-zinc-500 truncate">{item.summary}</p>
+                </div>
+              ))}
+              {(auditLogs.data?.items ?? []).length === 0 ? (
+                <p className="py-4 text-center text-xs text-zinc-400">
+                  {t("platform.noAuditLogs")}
+                </p>
+              ) : null}
             </div>
-          </div>
-        </Panel>
+          </Panel>
+        </div>
       </div>
     </section>
   );

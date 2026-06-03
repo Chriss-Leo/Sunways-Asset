@@ -45,7 +45,13 @@ func main() {
 	}
 	filebaseSvc, err := filebase.New(cfg.Filebase.AccessKey, cfg.Filebase.SecretKey, cfg.Filebase.Bucket, cfg.Filebase.GatewayURL)
 	if err != nil {
-		log.Printf("filebase service not available: %v", err)
+		log.Printf("filebase service not available, using local storage: %v", err)
+		filebaseSvc, err = filebase.NewLocal(cfg.Filebase.LocalDir, cfg.Filebase.LocalURL)
+		if err != nil {
+			log.Printf("local storage not available: %v", err)
+		} else {
+			log.Printf("local file storage enabled at %s", cfg.Filebase.LocalDir)
+		}
 	}
 	walletSvc := wallet.NewService(cfg.NonceTTL)
 	authSvc := auth.NewService(cfg.SessionTTL)

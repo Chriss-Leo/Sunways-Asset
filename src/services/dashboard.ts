@@ -111,6 +111,7 @@ export type IndexerStatus = {
 
 export type AdminTxResponse = {
   txHash: string;
+  stationId?: number;
 };
 
 export type Organization = {
@@ -427,6 +428,19 @@ export type IssuanceCheckResult = {
 export async function checkAssetIssuanceReady(assetDraftId: number) {
   return request<IssuanceCheckResult>(
     `/platform/assets/${assetDraftId}/issuance-check`,
+  );
+}
+
+export async function issueAssetDraft(
+  assetDraftId: number,
+  payload: { actor: string },
+) {
+  return request<{ asset: AssetDraft; stationId: number; txHash: string }>(
+    `/platform/assets/${assetDraftId}/issue`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
   );
 }
 

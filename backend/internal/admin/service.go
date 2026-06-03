@@ -21,7 +21,8 @@ import (
 var ErrDisabled = errors.New("admin transaction service is not configured")
 
 const powerStationABI = `[
-  {"type":"function","name":"registerStation","stateMutability":"nonpayable","inputs":[{"name":"owner","type":"address"},{"name":"name","type":"string"},{"name":"region","type":"string"},{"name":"capacityKw","type":"uint256"},{"name":"commissionedAt","type":"uint64"},{"name":"metadataURI","type":"string"}],"outputs":[{"name":"stationId","type":"uint256"}]}
+  {"type":"function","name":"registerStation","stateMutability":"nonpayable","inputs":[{"name":"owner","type":"address"},{"name":"name","type":"string"},{"name":"region","type":"string"},{"name":"capacityKw","type":"uint256"},{"name":"commissionedAt","type":"uint64"},{"name":"metadataURI","type":"string"}],"outputs":[{"name":"stationId","type":"uint256"}]},
+  {"type":"event","name":"StationRegistered","inputs":[{"name":"stationId","type":"uint256","indexed":true},{"name":"owner","type":"address","indexed":true},{"name":"operator","type":"address","indexed":true},{"name":"metadataURI","type":"string","indexed":false},{"name":"capacityKw","type":"uint256","indexed":false}]}
 ]`
 
 const revenueABI = `[
@@ -88,6 +89,11 @@ type RegisterStationRequest struct {
 	MetadataURI    string `json:"metadataUri"`
 }
 
+type RegisterStationResult struct {
+	TxHash    common.Hash `json:"txHash"`
+	StationID uint64      `json:"stationId"`
+}
+
 type DepositRevenueRequest struct {
 	StationID uint64 `json:"stationId"`
 	AmountWei string `json:"amountWei"`
@@ -110,9 +116,33 @@ type IssueCertificateRequest struct {
 }
 
 func (s *Service) RegisterStation(ctx context.Context, req RegisterStationRequest) (common.Hash, error) {
+	data, err := s.packRegisterStation(req)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return s.send(ctx, s.chain.Contracts.PowerStationNFT, big.NewInt(0), data)
+}
+
+func (s *Service) RegisterStationAndWait(ctx context.Context, req RegisterStationRequest) (RegisterStationResult, error) {
+	data, err := s.packRegisterStation(req)
+	if err != nil {
+		return RegisterStationResult{}, err
+	}
+	receipt, err := s.sendAndWait(ctx, s.chain.Contracts.PowerStationNFT, big.NewInt(0), data)
+	if err != nil {
+		return RegisterStationResult{}, err
+	}
+	stationID, err := s.stationIDFromReceipt(receipt)
+	if err != nil {
+		return RegisterStationResult{}, err
+	}
+	return RegisterStationResult{TxHash: receipt.TxHash, StationID: stationID}, nil
+}
+
+func (s *Service) packRegisterStation(req RegisterStationRequest) ([]byte, error) {
 	amount, ok := new(big.Int).SetString(req.CapacityKW, 10)
 	if !ok {
-		return common.Hash{}, errors.New("invalid capacity")
+		return nil, errors.New("invalid capacity")
 	}
 	data, err := s.abis["PowerStationNFT"].Pack(
 		"registerStation",
@@ -124,9 +154,9 @@ func (s *Service) RegisterStation(ctx context.Context, req RegisterStationReques
 		req.MetadataURI,
 	)
 	if err != nil {
-		return common.Hash{}, err
+		return nil, err
 	}
-	return s.send(ctx, s.chain.Contracts.PowerStationNFT, big.NewInt(0), data)
+	return data, nil
 }
 
 func (s *Service) DepositRevenue(ctx context.Context, req DepositRevenueRequest) (common.Hash, error) {
@@ -180,18 +210,63 @@ func (s *Service) IssueCertificate(ctx context.Context, req IssueCertificateRequ
 }
 
 func (s *Service) send(ctx context.Context, to common.Address, value *big.Int, data []byte) (common.Hash, error) {
-	if !s.Enabled() {
-		return common.Hash{}, ErrDisabled
+	tx, err := s.submit(ctx, to, value, data, 15*time.Second)
+	if err != nil {
+		return common.Hash{}, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	return tx.Hash(), nil
+}
+
+func (s *Service) sendAndWait(ctx context.Context, to common.Address, value *big.Int, data []byte) (*types.Receipt, error) {
+	tx, err := s.submit(ctx, to, value, data, 45*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	receipt, err := s.waitReceipt(ctx, tx.Hash())
+	if err != nil {
+		return nil, err
+	}
+	if receipt.Status != types.ReceiptStatusSuccessful {
+		return nil, errors.New("transaction reverted")
+	}
+	return receipt, nil
+}
+
+func (s *Service) waitReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
+	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		receipt, err := s.client.TransactionReceipt(ctx, hash)
+		if err == nil {
+			return receipt, nil
+		}
+		if !errors.Is(err, ethereum.NotFound) {
+			return nil, err
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-ticker.C:
+		}
+	}
+}
+
+func (s *Service) submit(ctx context.Context, to common.Address, value *big.Int, data []byte, timeout time.Duration) (*types.Transaction, error) {
+	if !s.Enabled() {
+		return nil, ErrDisabled
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	nonce, err := s.client.PendingNonceAt(ctx, s.from)
 	if err != nil {
-		return common.Hash{}, err
+		return nil, err
 	}
 	gasPrice, err := s.client.SuggestGasPrice(ctx)
 	if err != nil {
-		return common.Hash{}, err
+		return nil, err
 	}
 	gasLimit, err := s.client.EstimateGas(ctx, ethereum.CallMsg{
 		From:  s.from,
@@ -205,10 +280,23 @@ func (s *Service) send(ctx context.Context, to common.Address, value *big.Int, d
 	tx := types.NewTransaction(nonce, to, value, gasLimit+50_000, gasPrice, data)
 	signed, err := types.SignTx(tx, types.LatestSignerForChainID(big.NewInt(s.chain.ChainID)), s.privateKey)
 	if err != nil {
-		return common.Hash{}, err
+		return nil, err
 	}
 	if err := s.client.SendTransaction(ctx, signed); err != nil {
-		return common.Hash{}, err
+		return nil, err
 	}
-	return signed.Hash(), nil
+	return signed, nil
+}
+
+func (s *Service) stationIDFromReceipt(receipt *types.Receipt) (uint64, error) {
+	event := s.abis["PowerStationNFT"].Events["StationRegistered"]
+	for _, log := range receipt.Logs {
+		if log.Address != s.chain.Contracts.PowerStationNFT || len(log.Topics) < 2 {
+			continue
+		}
+		if log.Topics[0] == event.ID {
+			return new(big.Int).SetBytes(log.Topics[1].Bytes()).Uint64(), nil
+		}
+	}
+	return 0, errors.New("StationRegistered event not found in receipt")
 }

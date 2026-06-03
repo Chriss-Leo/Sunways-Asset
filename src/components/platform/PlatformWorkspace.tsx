@@ -14,6 +14,7 @@ import {
   getAssetFiles,
   getOrganizations,
   getPlatformAuditLogs,
+  issueAssetDraft,
   updateAssetDraftStatus,
 } from "@/services/dashboard";
 
@@ -145,7 +146,7 @@ function shortValue(value: string) {
   return `${value.slice(0, 8)}...${value.slice(-6)}`;
 }
 
-function statusBadge(status: string) {
+function statusBadge(status: string, label: string) {
   const colors: Record<string, string> = {
     approved: "bg-emerald-100 text-emerald-800",
     draft: "bg-zinc-100 text-zinc-700",
@@ -155,7 +156,11 @@ function statusBadge(status: string) {
     submitted: "bg-amber-100 text-amber-800",
   };
   const base = colors[status] ?? "bg-zinc-100 text-zinc-700";
-  return `rounded-md px-2 py-1 text-xs font-semibold ${base}`;
+  return (
+    <span className={`rounded-md px-2 py-1 text-xs font-semibold ${base}`}>
+      {label}
+    </span>
+  );
 }
 
 export function PlatformWorkspace() {
@@ -219,6 +224,11 @@ export function PlatformWorkspace() {
     ready: boolean;
     checks: { check: string; passed: boolean; message?: string }[];
   } | null>(null);
+  const [issueResult, setIssueResult] = useState<{
+    assetId: number;
+    stationId: number;
+    txHash: string;
+  } | null>(null);
 
   const invalidatePlatform = async () => {
     await Promise.all([
@@ -276,6 +286,15 @@ export function PlatformWorkspace() {
       }),
     onSuccess: invalidatePlatform,
   });
+  const resubmitMutation = useMutation({
+    mutationFn: (id: number) =>
+      updateAssetDraftStatus(id, {
+        actor: account,
+        note: "Resubmitted for review after revision",
+        status: "draft",
+      }),
+    onSuccess: invalidatePlatform,
+  });
   const metadataMutation = useMutation({
     mutationFn: (id: number) => generateAssetMetadata(id),
     onSuccess: async (data, id) => {
@@ -299,6 +318,22 @@ export function PlatformWorkspace() {
       });
     },
   });
+  const issueMutation = useMutation({
+    mutationFn: (id: number) => issueAssetDraft(id, { actor: account }),
+    onSuccess: async (data) => {
+      setIssueResult({
+        assetId: data.asset.id,
+        stationId: data.stationId,
+        txHash: data.txHash,
+      });
+      await Promise.all([
+        invalidatePlatform(),
+        queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] }),
+        queryClient.invalidateQueries({ queryKey: ["stations"] }),
+        queryClient.invalidateQueries({ queryKey: ["indexer-status"] }),
+      ]);
+    },
+  });
   const fileMutation = useMutation({
     mutationFn: () =>
       createAssetFile({
@@ -313,11 +348,18 @@ export function PlatformWorkspace() {
   const summary = useMemo(() => {
     const assetItems = assets.data?.items ?? [];
     return {
-      approved: assetItems.filter((item) => item.status === "approved").length,
-      drafts: assetItems.filter((item) => item.status === "draft").length,
-      organizations: organizations.data?.items.length ?? 0,
-      submitted: assetItems.filter(
-        (item) => item.status === "submitted" || item.status === "metadata_ready",
+      draftCount: assetItems.filter(
+        (item) => item.status === "draft" || item.status === "rejected",
+      ).length,
+      inReviewCount: assetItems.filter(
+        (item) => item.status === "submitted",
+      ).length,
+      orgCount: organizations.data?.items.length ?? 0,
+      onChainCount: assetItems.filter(
+        (item) => item.status === "onchain",
+      ).length,
+      readyCount: assetItems.filter(
+        (item) => item.status === "approved" || item.status === "metadata_ready",
       ).length,
     };
   }, [assets.data?.items, organizations.data?.items]);
@@ -334,11 +376,12 @@ export function PlatformWorkspace() {
               {t("platform.onboardingWorkspace")}
             </h2>
           </div>
-          <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-            <Metric label={t("platform.organizations")} value={summary.organizations} />
-            <Metric label={t("platform.drafts")} value={summary.drafts} />
-            <Metric label={t("platform.submitted")} value={summary.submitted} />
-            <Metric label={t("platform.approved")} value={summary.approved} />
+          <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
+            <Metric label={t("platform.organizations")} value={summary.orgCount} />
+            <Metric label={t("platform.drafts")} value={summary.draftCount} />
+            <Metric label={t("platform.inReview")} value={summary.inReviewCount} />
+            <Metric label={t("platform.ready")} value={summary.readyCount} />
+            <Metric label={t("platform.issued")} value={summary.onChainCount} />
           </div>
         </div>
       </div>
@@ -525,11 +568,13 @@ export function PlatformWorkspace() {
                   }`}
                   key={check.check}
                 >
-                  <span>{check.passed ? "✅" : "❌"}</span>
+                  <span className="font-semibold">
+                    {check.passed ? t("platform.passed") : t("platform.failed")}
+                  </span>
                   <span className="font-medium">{check.check}</span>
                   {check.message ? (
                     <span className="text-xs text-zinc-500">
-                      — {check.message}
+                      - {check.message}
                     </span>
                   ) : null}
                 </div>
@@ -539,8 +584,31 @@ export function PlatformWorkspace() {
         </Panel>
       ) : null}
 
+      {issueResult ? (
+        <Panel title={t("platform.issuanceResult", { id: issueResult.assetId })}>
+          <div className="grid gap-3 text-sm sm:grid-cols-2">
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2">
+              <p className="text-xs font-semibold uppercase text-emerald-700">
+                {t("platform.stationMinted")}
+              </p>
+              <p className="mt-1 font-mono text-emerald-950">
+                #{issueResult.stationId}
+              </p>
+            </div>
+            <div className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2">
+              <p className="text-xs font-semibold uppercase text-zinc-500">
+                {t("platform.transaction")}
+              </p>
+              <p className="mt-1 break-all font-mono text-xs text-zinc-700">
+                {issueResult.txHash}
+              </p>
+            </div>
+          </div>
+        </Panel>
+      ) : null}
+
       <div className="grid gap-5 xl:grid-cols-[1.4fr_0.6fr]">
-        <Panel title={t("platform.assetReviewQueue")}>
+        <Panel title={t("platform.assetPipeline")}>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[820px] text-left text-sm">
               <thead className="border-b border-zinc-200 text-xs uppercase text-zinc-500">
@@ -555,73 +623,122 @@ export function PlatformWorkspace() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100">
-                {(assets.data?.items ?? []).map((item) => (
-                  <tr key={item.id}>
-                    <td className="py-3 pr-3 font-mono">#{item.id}</td>
-                    <td className="py-3 pr-3 font-medium text-zinc-950">
-                      {item.name}
-                    </td>
-                    <td className="py-3 pr-3">{item.assetType}</td>
-                    <td className="py-3 pr-3">{item.region}</td>
-                    <td className="py-3 pr-3">{item.capacityKw} kW</td>
-                    <td className="py-3 pr-3">
-                      <span className={statusBadge(item.status)}>
-                        {item.status}
-                      </span>
-                    </td>
-                    <td className="py-3 pr-3">
-                      <div className="flex flex-wrap gap-1">
-                        {item.status === "draft" ? (
-                          <button
-                            className="rounded-md border border-zinc-300 px-2 py-1 text-xs font-semibold text-zinc-700 transition hover:border-zinc-900"
-                            onClick={() => submitMutation.mutate(item.id)}
-                            type="button"
-                          >
-                            {t("platform.submit")}
-                          </button>
+                {(assets.data?.items ?? []).map((item) => {
+                  const canGenerateMetadata =
+                    item.status === "approved" && !item.metadataUri;
+                  const canCheck =
+                    item.status === "approved" || item.status === "metadata_ready";
+                  const canIssue =
+                    canCheck && Boolean(item.metadataUri) && !item.stationId;
+
+                  return (
+                    <tr key={item.id}>
+                      <td className="py-3 pr-3 font-mono">#{item.id}</td>
+                      <td className="py-3 pr-3 font-medium text-zinc-950">
+                        <p>{item.name}</p>
+                        {item.stationId ? (
+                          <p className="mt-1 font-mono text-xs text-emerald-700">
+                            {t("platform.stationIssued", { id: item.stationId })}
+                          </p>
+                        ) : item.metadataUri ? (
+                          <p className="mt-1 font-mono text-xs text-zinc-500">
+                            {shortValue(item.metadataUri)}
+                          </p>
                         ) : null}
-                        {item.status === "submitted" || item.status === "metadata_ready" ? (
-                          <button
-                            className="rounded-md border border-emerald-300 px-2 py-1 text-xs font-semibold text-emerald-700 transition hover:border-emerald-700"
-                            onClick={() => approveMutation.mutate(item.id)}
-                            type="button"
-                          >
-                            {t("platform.approve")}
-                          </button>
+                      </td>
+                      <td className="py-3 pr-3">{item.assetType}</td>
+                      <td className="py-3 pr-3">{item.region}</td>
+                      <td className="py-3 pr-3">{item.capacityKw} kW</td>
+                      <td className="py-3 pr-3">
+                        {statusBadge(item.status, t(`platform.status.${item.status}`))}
+                      </td>
+                      <td className="py-3 pr-3">
+                        <div className="flex flex-wrap gap-1">
+                          {item.status === "draft" ? (
+                            <button
+                              className="rounded-md border border-zinc-300 px-2 py-1 text-xs font-semibold text-zinc-700 transition hover:border-zinc-900"
+                              onClick={() => submitMutation.mutate(item.id)}
+                              type="button"
+                            >
+                              {t("platform.submit")}
+                            </button>
+                          ) : null}
+                          {item.status === "rejected" ? (
+                            <button
+                              className="rounded-md border border-amber-300 px-2 py-1 text-xs font-semibold text-amber-700 transition hover:border-amber-700"
+                              onClick={() => resubmitMutation.mutate(item.id)}
+                              type="button"
+                            >
+                              {resubmitMutation.isPending && resubmitMutation.variables === item.id
+                                ? t("platform.resubmitting")
+                                : t("platform.resubmit")}
+                            </button>
+                          ) : null}
+                          {item.status === "submitted" ? (
+                            <button
+                              className="rounded-md border border-emerald-300 px-2 py-1 text-xs font-semibold text-emerald-700 transition hover:border-emerald-700"
+                              onClick={() => approveMutation.mutate(item.id)}
+                              type="button"
+                            >
+                              {t("platform.approve")}
+                            </button>
+                          ) : null}
+                          {item.status === "submitted" || item.status === "metadata_ready" ? (
+                            <button
+                              className="rounded-md border border-red-300 px-2 py-1 text-xs font-semibold text-red-700 transition hover:border-red-700"
+                              onClick={() => rejectMutation.mutate(item.id)}
+                              type="button"
+                            >
+                              {t("platform.reject")}
+                            </button>
+                          ) : null}
+                          {canGenerateMetadata ? (
+                            <button
+                              className="rounded-md border border-blue-300 px-2 py-1 text-xs font-semibold text-blue-700 transition hover:border-blue-700"
+                              onClick={() => metadataMutation.mutate(item.id)}
+                              type="button"
+                            >
+                              {metadataMutation.isPending && metadataMutation.variables === item.id
+                                ? t("platform.generating")
+                                : t("platform.metadata")}
+                            </button>
+                          ) : null}
+                          {canCheck ? (
+                            <button
+                              className="rounded-md border border-purple-300 px-2 py-1 text-xs font-semibold text-purple-700 transition hover:border-purple-700"
+                              onClick={() => checkMutation.mutate(item.id)}
+                              type="button"
+                            >
+                              {t("platform.check")}
+                            </button>
+                          ) : null}
+                          {canIssue ? (
+                            <button
+                              className="rounded-md border border-zinc-900 bg-zinc-950 px-2 py-1 text-xs font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:border-zinc-300 disabled:bg-zinc-300"
+                              disabled={
+                                issueMutation.isPending &&
+                                issueMutation.variables === item.id
+                              }
+                              onClick={() => issueMutation.mutate(item.id)}
+                              type="button"
+                            >
+                              {issueMutation.isPending &&
+                              issueMutation.variables === item.id
+                                ? t("platform.issuing")
+                                : t("platform.issue")}
+                            </button>
+                          ) : null}
+                        </div>
+                        {issueMutation.error &&
+                        issueMutation.variables === item.id ? (
+                          <p className="mt-2 max-w-72 text-xs text-red-700">
+                            {issueMutation.error.message}
+                          </p>
                         ) : null}
-                        {item.status === "submitted" || item.status === "metadata_ready" ? (
-                          <button
-                            className="rounded-md border border-red-300 px-2 py-1 text-xs font-semibold text-red-700 transition hover:border-red-700"
-                            onClick={() => rejectMutation.mutate(item.id)}
-                            type="button"
-                          >
-                            {t("platform.reject")}
-                          </button>
-                        ) : null}
-                        {item.status === "approved" ? (
-                          <button
-                            className="rounded-md border border-blue-300 px-2 py-1 text-xs font-semibold text-blue-700 transition hover:border-blue-700"
-                            onClick={() => metadataMutation.mutate(item.id)}
-                            type="button"
-                          >
-                            {metadataMutation.isPending && metadataMutation.variables === item.id
-                              ? t("platform.generating")
-                              : t("platform.metadata")}
-                          </button>
-                        ) : null}
-                        {item.status === "approved" || item.status === "metadata_ready" ? (
-                          <button
-                            className="rounded-md border border-purple-300 px-2 py-1 text-xs font-semibold text-purple-700 transition hover:border-purple-700"
-                            onClick={() => checkMutation.mutate(item.id)}
-                            type="button"
-                          >
-                            {t("platform.check")}
-                          </button>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

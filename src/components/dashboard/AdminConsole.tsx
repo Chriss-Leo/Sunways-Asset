@@ -23,7 +23,15 @@ function shortAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
-function TxResult({ error, value }: { error?: Error | null; value?: string }) {
+function TxResult({
+  error,
+  stationId,
+  value,
+}: {
+  error?: Error | null;
+  stationId?: number;
+  value?: string;
+}) {
   const { t } = useT();
   if (error) {
     return (
@@ -41,6 +49,11 @@ function TxResult({ error, value }: { error?: Error | null; value?: string }) {
         {t("admin.submitted")}
       </p>
       <p className="mt-1 truncate font-mono text-xs text-emerald-800">{value}</p>
+      {stationId !== undefined ? (
+        <p className="mt-1 font-mono text-xs font-semibold text-emerald-900">
+          {t("platform.stationMinted")}: #{stationId}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -323,6 +336,7 @@ export function AdminConsole() {
             </div>
             <TxResult
               error={stationMutation.error}
+              stationId={stationMutation.data?.stationId}
               value={stationMutation.data?.txHash}
             />
           </form>

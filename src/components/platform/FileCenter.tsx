@@ -5,6 +5,7 @@ import {
   generateAssetMetadata,
   getAssetDrafts,
   getAssetFiles,
+  updateAssetDraftStatus,
   uploadFileToFilebase,
 } from "@/services/dashboard";
 
@@ -94,15 +95,24 @@ export function FileCenter() {
     setDragOver(true);
   };
 
-  const fileItems = files?.items ?? [];
-
   const filteredFiles = useMemo(() => {
+    const fileItems = files?.items ?? [];
     if (!selectedCategory) return fileItems;
     return fileItems.filter((f) => f.category === selectedCategory);
-  }, [fileItems, selectedCategory]);
+  }, [files?.items, selectedCategory]);
 
   const metadataMutation = useMutation({
-    mutationFn: (draftId: number) => generateAssetMetadata(draftId),
+    mutationFn: async (draftId: number) => {
+      const data = await generateAssetMetadata(draftId);
+      if (data.metadataUri) {
+        await updateAssetDraftStatus(draftId, {
+          actor: "console",
+          note: `Metadata uploaded to ${data.metadataUri}`,
+          status: "metadata_ready",
+        });
+      }
+      return data;
+    },
     onSuccess: (data) => {
       setUploadNote(
         t("platform.fileCenter.metadataGenerated", { uri: data.metadataUri || "local only" }),

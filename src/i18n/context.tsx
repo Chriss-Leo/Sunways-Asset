@@ -48,9 +48,9 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
   // hydration mismatches. The saved/browser locale is resolved in the effect.
   const [locale, setLocaleState] = useState<Locale>("en");
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
-    setLocaleState(resolveLocale());
+    const id = window.setTimeout(() => setLocaleState(resolveLocale()), 0);
+    return () => window.clearTimeout(id);
   }, []);
 
   const setLocale = useCallback((next: Locale) => {

@@ -99,7 +99,34 @@ func (s *Store) GetAssetDraft(id uint) (AssetDraft, error) {
 	return asset, err
 }
 
+var validStatusTransitions = map[string][]string{
+	"draft":          {"submitted"},
+	"submitted":      {"approved", "rejected", "draft"},
+	"approved":       {"rejected", "metadata_ready"},
+	"metadata_ready": {"rejected", "approved"},
+	"rejected":       {"draft"},
+}
+
 func (s *Store) UpdateAssetDraftStatus(id uint, status string, note string) (AssetDraft, error) {
+	current, err := s.GetAssetDraft(id)
+	if err != nil {
+		return AssetDraft{}, err
+	}
+	if current.Status == "onchain" {
+		return AssetDraft{}, gorm.ErrInvalidData
+	}
+	allowed := validStatusTransitions[current.Status]
+	valid := false
+	for _, next := range allowed {
+		if next == status {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		return AssetDraft{}, gorm.ErrInvalidData
+	}
+
 	now := time.Now()
 	updates := map[string]any{
 		"status":      status,
@@ -110,8 +137,29 @@ func (s *Store) UpdateAssetDraftStatus(id uint, status string, note string) (Ass
 		updates["submitted_at"] = &now
 	case "approved":
 		updates["approved_at"] = &now
+	case "draft":
+		updates["submitted_at"] = nil
+		updates["approved_at"] = nil
 	}
 	if err := s.db.Model(&AssetDraft{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+		return AssetDraft{}, err
+	}
+	return s.GetAssetDraft(id)
+}
+
+func (s *Store) UpdateAssetDraftMetadata(id uint, metadataURI string) (AssetDraft, error) {
+	if err := s.db.Model(&AssetDraft{}).Where("id = ?", id).Update("metadata_uri", metadataURI).Error; err != nil {
+		return AssetDraft{}, err
+	}
+	return s.GetAssetDraft(id)
+}
+
+func (s *Store) MarkAssetDraftIssued(id uint, stationID uint64, txHash string) (AssetDraft, error) {
+	if err := s.db.Model(&AssetDraft{}).Where("id = ?", id).Updates(map[string]any{
+		"status":     "onchain",
+		"station_id": stationID,
+		"tx_hash":    txHash,
+	}).Error; err != nil {
 		return AssetDraft{}, err
 	}
 	return s.GetAssetDraft(id)

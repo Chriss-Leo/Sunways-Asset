@@ -63,6 +63,8 @@ const en = {
     issuanceBatch: "2026-Q2 issuance batch",
     backend: "Backend",
     onChain: "On-chain",
+    myAssets: "My Assets",
+    allAssets: "All Assets",
   },
 
   station: {

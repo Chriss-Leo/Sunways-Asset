@@ -8,10 +8,10 @@ import {PowerStationNFT} from "../src/PowerStationNFT.sol";
 import {RevenueVault} from "../src/RevenueVault.sol";
 
 contract SeedLocal is Script {
-    address private constant DEFAULT_POWER_STATION_NFT = 0x8464135c8F25Da09e49BC8782676a84730C318bC;
-    address private constant DEFAULT_REVENUE_VAULT = 0x71C95911E9a5D330f4D621842EC243EE1343292e;
-    address private constant DEFAULT_CARBON_CREDIT_TOKEN = 0x948B3c65b89DF0B4894ABE91E6D02FE579834F8F;
-    address private constant DEFAULT_GREEN_CERTIFICATE = 0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9;
+    address private constant DEFAULT_POWER_STATION_NFT = 0xE5BD5bDC03371fB239956dbbF40bD185D6c2ea28;
+    address private constant DEFAULT_REVENUE_VAULT = 0xAd5d57aD9bB17d34Debb88566ab2F5dB879Cc46F;
+    address private constant DEFAULT_CARBON_CREDIT_TOKEN = 0x130A46b6E41DB6E1e18fb9c759F223c459190e90;
+    address private constant DEFAULT_GREEN_CERTIFICATE = 0x55cb3b67D9E65F0Cf4eABCAC84564a1bE6E3b06A;
 
     function run() external {
         PowerStationNFT stationNFT = PowerStationNFT(vm.envOr("POWER_STATION_NFT", DEFAULT_POWER_STATION_NFT));

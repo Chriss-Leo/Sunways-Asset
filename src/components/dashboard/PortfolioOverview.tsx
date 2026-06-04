@@ -1,40 +1,41 @@
+import { useState } from "react";
 import { formatEther } from "viem";
 import { useQuery } from "@tanstack/react-query";
-import { useChainId, useReadContract } from "wagmi";
+import { useAccount, useChainId, useReadContract, useReadContracts } from "wagmi";
 import { requiredChain } from "@/config/chains";
 import { useT } from "@/i18n";
 import {
   carbonCreditTokenAbi,
   greenCertificateAbi,
+  powerStationNFTAbi,
   revenueVaultAbi,
   sunwaysContracts,
 } from "@/contracts/sunways";
 import { contractRows } from "@/data/mockDashboard";
 import { getDashboardSummary } from "@/services/dashboard";
 
-const stationId = BigInt(1);
 const certificateId = BigInt(1);
+const nftAddr = sunwaysContracts.PowerStationNFT.address;
+const vaultAddr = sunwaysContracts.RevenueVault.address;
+const carbonAddr = sunwaysContracts.CarbonCreditToken.address;
+const certAddr = sunwaysContracts.GreenCertificate.address;
 
 function shortAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
-function formatWeiString(value: string | undefined) {
-  if (!value) return null;
-  return `${Number(formatEther(BigInt(value))).toLocaleString(undefined, {
+function formatWeiBigint(value: bigint | undefined) {
+  if (value == null || value === BigInt(0)) return null;
+  return `${Number(formatEther(value)).toLocaleString(undefined, {
     maximumFractionDigits: 2,
   })} ETH`;
 }
 
-function formatTokenString(value: string | undefined, suffix: string) {
-  if (!value) return null;
-  return `${Number(formatEther(BigInt(value))).toLocaleString(undefined, {
+function formatTokenBigint(value: bigint | undefined, suffix: string) {
+  if (value == null || value === BigInt(0)) return null;
+  return `${Number(formatEther(value)).toLocaleString(undefined, {
     maximumFractionDigits: 2,
   })} ${suffix}`;
-}
-
-function hasNonZero(value: string | undefined) {
-  return Boolean(value && value !== "0");
 }
 
 const toneClass = {
@@ -44,143 +45,239 @@ const toneClass = {
   amber: "border-amber-200 bg-amber-50 text-amber-800",
 } as const;
 
+type Scope = "personal" | "global";
+
 export function PortfolioOverview() {
   const { t } = useT();
+  const { address: account } = useAccount();
+  const chainId = useChainId();
+  const isLocalChain = chainId === requiredChain.id;
+  const query = { enabled: isLocalChain, retry: false };
+  const [scope, setScope] = useState<Scope>(account ? "personal" : "global");
+
+  // ── Backend ──
+  const backendAccount = scope === "personal" ? account : undefined;
   const summaryQuery = useQuery({
-    queryKey: ["dashboard-summary"],
-    queryFn: getDashboardSummary,
+    queryKey: ["dashboard-summary", backendAccount ?? "global"],
+    queryFn: () => getDashboardSummary(backendAccount),
     retry: false,
     refetchInterval: 10_000,
   });
-  const chainId = useChainId();
-  const isLocalChain = chainId === requiredChain.id;
-  const query = {
-    enabled: isLocalChain,
-    retry: false,
-  };
+  const backendOk =
+    summaryQuery.data != null && summaryQuery.data.stations > 0;
 
-  const ownerQuery = useReadContract({
-    ...sunwaysContracts.PowerStationNFT,
-    functionName: "ownerOf",
-    args: [stationId],
-    query,
+  // ── Chain: personal ──
+  const myCountQ = useReadContract({
+    address: nftAddr,
+    abi: powerStationNFTAbi,
+    functionName: "balanceOf",
+    args: account ? [account] : undefined,
+    query: { ...query, enabled: query.enabled && scope === "personal" && !!account },
   });
-  const stationOwner =
-    typeof ownerQuery.data === "string" ? ownerQuery.data : undefined;
+  const myCount =
+    typeof myCountQ.data === "bigint" ? Number(myCountQ.data) : 0;
 
-  const revenueQuery = useReadContract({
-    address: sunwaysContracts.RevenueVault.address,
-    abi: revenueVaultAbi,
-    functionName: "totalDeposited",
-    args: [stationId],
-    query,
+  const tokenIdsQ = useReadContracts({
+    contracts: Array.from({ length: myCount }, (_, i) => ({
+      address: nftAddr,
+      abi: powerStationNFTAbi,
+      functionName: "tokenOfOwnerByIndex" as const,
+      args: account ? [account, BigInt(i)] : undefined,
+    })),
+    query: { ...query, enabled: query.enabled && scope === "personal" && !!account && myCount > 0 },
   });
-  const carbonQuery = useReadContract({
-    address: sunwaysContracts.CarbonCreditToken.address,
+  const myStationIds = (tokenIdsQ.data || [])
+    .map((r) => r.result)
+    .filter((v): v is bigint => typeof v === "bigint");
+
+  const myRevenueQ = useReadContracts({
+    contracts: myStationIds.map((id) => ({
+      address: vaultAddr,
+      abi: revenueVaultAbi,
+      functionName: "totalDeposited" as const,
+      args: [id],
+    })),
+    query: { ...query, enabled: scope === "personal" && myStationIds.length > 0 },
+  });
+  const myChainRevenue = (myRevenueQ.data || []).reduce(
+    (sum, r) => (typeof r.result === "bigint" ? sum + r.result : sum),
+    BigInt(0),
+  );
+
+  const myCarbonQ = useReadContract({
+    address: carbonAddr,
     abi: carbonCreditTokenAbi,
     functionName: "balanceOf",
-    args: stationOwner ? [stationOwner] : undefined,
-    query: { ...query, enabled: query.enabled && Boolean(stationOwner) },
+    args: account ? [account] : undefined,
+    query: { ...query, enabled: query.enabled && scope === "personal" && !!account },
   });
-  const certificateQuery = useReadContract({
-    address: sunwaysContracts.GreenCertificate.address,
+
+  const myCertsQ = useReadContract({
+    address: certAddr,
     abi: greenCertificateAbi,
     functionName: "balanceOf",
-    args: stationOwner ? [stationOwner, certificateId] : undefined,
-    query: { ...query, enabled: query.enabled && Boolean(stationOwner) },
+    args: account ? [account, certificateId] : undefined,
+    query: { ...query, enabled: query.enabled && scope === "personal" && !!account },
   });
+
+  // ── Chain: global ──
+  const globalStationsQ = useReadContract({
+    address: nftAddr,
+    abi: powerStationNFTAbi,
+    functionName: "totalStations",
+    query: { ...query, enabled: scope === "global" },
+  });
+
+  const globalRevenueQ = useReadContract({
+    address: vaultAddr,
+    abi: revenueVaultAbi,
+    functionName: "totalGlobalDeposited",
+    query: { ...query, enabled: scope === "global" },
+  });
+
+  const globalCarbonQ = useReadContract({
+    address: carbonAddr,
+    abi: carbonCreditTokenAbi,
+    functionName: "totalSupply",
+    query: { ...query, enabled: scope === "global" },
+  });
+
+  const globalCertsQ = useReadContract({
+    address: certAddr,
+    abi: greenCertificateAbi,
+    functionName: "totalSupply",
+    args: [certificateId],
+    query: { ...query, enabled: scope === "global" },
+  });
+
+  // ── Resolve values ──
+  const isPersonal = scope === "personal" && !!account;
+
+  const stationsValue: string = backendOk
+    ? summaryQuery.data!.stations.toLocaleString()
+    : isPersonal
+      ? myCount.toLocaleString()
+      : scope === "global" && typeof globalStationsQ.data === "bigint"
+        ? globalStationsQ.data.toLocaleString()
+        : "—";
+
+  const revenueValue: string = backendOk
+    ? (formatWeiBigint(BigInt(summaryQuery.data!.totalRevenueWei)) ?? "0 ETH")
+    : isPersonal
+      ? formatWeiBigint(myChainRevenue) ?? "0 ETH"
+      : scope === "global"
+        ? formatWeiBigint(globalRevenueQ.data as bigint | undefined) ?? "0 ETH"
+        : "—";
+
+  const carbonValue: string = backendOk
+    ? (formatTokenBigint(BigInt(summaryQuery.data!.totalCarbonAmount), "SWC") ?? "0 SWC")
+    : isPersonal
+      ? formatTokenBigint(myCarbonQ.data as bigint | undefined, "SWC") ?? "0 SWC"
+      : scope === "global"
+        ? formatTokenBigint(globalCarbonQ.data as bigint | undefined, "SWC") ?? "0 SWC"
+        : "—";
+
+  const certsValue: string = backendOk
+    ? Number(summaryQuery.data!.totalCertificates).toLocaleString()
+    : isPersonal
+      ? ((myCertsQ.data as bigint | undefined)?.toLocaleString() ?? "0")
+      : scope === "global"
+        ? ((globalCertsQ.data as bigint | undefined)?.toLocaleString() ?? "0")
+        : "—";
+
+  const source: string | null = backendOk ? t("portfolio.backend") : t("portfolio.onChain");
 
   type Metric = {
     label: string;
     value: string;
     detail: string;
     tone: "emerald" | "sky" | "lime" | "amber";
-    source: string | null;
   };
-
-  const backendStations = summaryQuery.data && summaryQuery.data.stations > 0;
-  const backendRevenue = hasNonZero(summaryQuery.data?.totalRevenueWei);
-  const backendCarbon = hasNonZero(summaryQuery.data?.totalCarbonAmount);
-  const backendCerts = hasNonZero(summaryQuery.data?.totalCertificates);
 
   const metrics: Metric[] = [
     {
       label: t("portfolio.powerStations"),
-      value: backendStations
-        ? summaryQuery.data!.stations.toLocaleString()
-        : "—",
+      value: stationsValue,
       detail: t("portfolio.mwTracked", { capacity: summaryQuery.data?.totalCapacityKw ?? "0" }),
       tone: "emerald",
-      source: backendStations
-        ? t("portfolio.backend")
-        : typeof ownerQuery.data === "string"
-          ? t("portfolio.onChain")
-          : null,
     },
     {
       label: t("portfolio.revenuePool"),
-      value:
-        formatWeiString(summaryQuery.data?.totalRevenueWei) ??
-        (typeof revenueQuery.data === "bigint"
-          ? `${Number(formatEther(revenueQuery.data)).toLocaleString(undefined, { maximumFractionDigits: 2 })} ETH`
-          : null) ??
-        "—",
+      value: revenueValue,
       detail: t("portfolio.mockMonthlySettlement"),
       tone: "sky",
-      source: backendRevenue
-        ? t("portfolio.backend")
-        : typeof revenueQuery.data === "bigint"
-          ? t("portfolio.onChain")
-          : null,
     },
     {
       label: t("portfolio.carbonCredits"),
-      value:
-        formatTokenString(summaryQuery.data?.totalCarbonAmount, "SWC") ??
-        (typeof carbonQuery.data === "bigint"
-          ? `${Number(formatEther(carbonQuery.data)).toLocaleString(undefined, { maximumFractionDigits: 2 })} SWC`
-          : null) ??
-        "—",
+      value: carbonValue,
       detail: t("portfolio.pendingOracle"),
       tone: "lime",
-      source: backendCarbon
-        ? t("portfolio.backend")
-        : typeof carbonQuery.data === "bigint"
-          ? t("portfolio.onChain")
-          : null,
     },
     {
       label: t("portfolio.greenCertificates"),
-      value: backendCerts
-        ? Number(summaryQuery.data!.totalCertificates).toLocaleString()
-        : (typeof certificateQuery.data === "bigint" ? certificateQuery.data.toLocaleString() : null) ??
-          "—",
+      value: certsValue,
       detail: t("portfolio.issuanceBatch"),
       tone: "amber",
-      source: backendCerts
-        ? t("portfolio.backend")
-        : typeof certificateQuery.data === "bigint"
-          ? t("portfolio.onChain")
-          : null,
     },
   ];
 
   return (
     <section className="space-y-6">
+      {/* ── Scope toggle + source badge ── */}
+      <div className="flex items-center gap-3">
+        <div className="inline-flex rounded-lg border border-zinc-300 bg-zinc-100 p-0.5 text-sm">
+          <button
+            type="button"
+            disabled={!account}
+            onClick={() => setScope("personal")}
+            className={`rounded-md px-3 py-1.5 font-medium transition-colors ${
+              scope === "personal"
+                ? "bg-white text-zinc-950 shadow-sm"
+                : account
+                  ? "text-zinc-500 hover:text-zinc-700"
+                  : "cursor-not-allowed text-zinc-400"
+            }`}
+          >
+            {t("portfolio.myAssets")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setScope("global")}
+            className={`rounded-md px-3 py-1.5 font-medium transition-colors ${
+              scope === "global"
+                ? "bg-white text-zinc-950 shadow-sm"
+                : "text-zinc-500 hover:text-zinc-700"
+            }`}
+          >
+            {t("portfolio.allAssets")}
+          </button>
+        </div>
+
+        {source && (
+          <span
+            className={`inline-flex min-h-7 items-center rounded-full border px-2.5 text-xs font-semibold ${
+              toneClass[
+                scope === "personal" ? "emerald" : "sky"
+              ]
+            }`}
+          >
+            {source}
+          </span>
+        )}
+
+        {scope === "personal" && !account && (
+          <span className="text-xs text-zinc-400">{t("wallet.notConnected")}</span>
+        )}
+      </div>
+
+      {/* ── Metric cards ── */}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {metrics.map((metric) => (
           <article
             className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm"
             key={metric.label}
           >
-            {metric.source && (
-              <div
-                className={`inline-flex min-h-7 items-center rounded-full border px-2.5 text-xs font-semibold ${toneClass[metric.tone]}`}
-              >
-                {metric.source}
-              </div>
-            )}
-            <p className="mt-4 text-sm font-medium text-zinc-500">
+            <p className="text-sm font-medium text-zinc-500">
               {metric.label}
             </p>
             <p className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950">
@@ -193,6 +290,7 @@ export function PortfolioOverview() {
         ))}
       </div>
 
+      {/* ── Contract table ── */}
       <section className="rounded-lg border border-zinc-200 bg-white shadow-sm">
         <div className="flex flex-col gap-2 border-b border-zinc-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>

@@ -469,6 +469,54 @@ func (s *Store) GetStation(stationID uint64) (Station, error) {
 	return station, err
 }
 
+func (s *Store) DashboardSummaryByAccount(account string) (DashboardSummary, error) {
+	var stationCount int64
+	if err := s.db.Model(&Station{}).Where("owner = ?", account).Count(&stationCount).Error; err != nil {
+		return DashboardSummary{}, err
+	}
+
+	var stations []Station
+	if err := s.db.Where("owner = ?", account).Find(&stations).Error; err != nil {
+		return DashboardSummary{}, err
+	}
+	var deposits []RevenueDeposit
+	if err := s.db.Where("beneficiary = ?", account).Find(&deposits).Error; err != nil {
+		return DashboardSummary{}, err
+	}
+	var carbon []CarbonCreditIssuance
+	if err := s.db.Where("account = ?", account).Find(&carbon).Error; err != nil {
+		return DashboardSummary{}, err
+	}
+	var certificates []GreenCertificateIssuance
+	if err := s.db.Where("account = ?", account).Find(&certificates).Error; err != nil {
+		return DashboardSummary{}, err
+	}
+	var certRetirements []GreenCertificateRetirement
+	if err := s.db.Where("account = ?", account).Find(&certRetirements).Error; err != nil {
+		return DashboardSummary{}, err
+	}
+	var carbonRetirements []CarbonCreditRetirement
+	if err := s.db.Where("account = ?", account).Find(&carbonRetirements).Error; err != nil {
+		return DashboardSummary{}, err
+	}
+
+	totalCertIssued, _ := new(big.Int).SetString(sumStrings(mapSlice(certificates, func(v GreenCertificateIssuance) string { return v.Amount })), 10)
+	totalCertRetired, _ := new(big.Int).SetString(sumStrings(mapSlice(certRetirements, func(v GreenCertificateRetirement) string { return v.Amount })), 10)
+	totalCerts := new(big.Int).Sub(totalCertIssued, totalCertRetired).String()
+
+	totalCarbonIssued, _ := new(big.Int).SetString(sumStrings(mapSlice(carbon, func(v CarbonCreditIssuance) string { return v.Amount })), 10)
+	totalCarbonRetired, _ := new(big.Int).SetString(sumStrings(mapSlice(carbonRetirements, func(v CarbonCreditRetirement) string { return v.Amount })), 10)
+	totalCarbon := new(big.Int).Sub(totalCarbonIssued, totalCarbonRetired).String()
+
+	return DashboardSummary{
+		Stations:          stationCount,
+		TotalCapacityKW:   sumStrings(mapSlice(stations, func(v Station) string { return v.CapacityKW })),
+		TotalRevenueWei:   sumStrings(mapSlice(deposits, func(v RevenueDeposit) string { return v.AmountWei })),
+		TotalCarbonAmount: totalCarbon,
+		TotalCertificates: totalCerts,
+	}, nil
+}
+
 func (s *Store) DashboardSummary() (DashboardSummary, error) {
 	var stationCount int64
 	if err := s.db.Model(&Station{}).Count(&stationCount).Error; err != nil {

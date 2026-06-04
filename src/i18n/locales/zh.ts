@@ -63,6 +63,8 @@ const zh = {
     issuanceBatch: "2026-Q2 发行批次",
     backend: "后端",
     onChain: "链上",
+    myAssets: "我的资产",
+    allAssets: "全部资产",
   },
 
   station: {

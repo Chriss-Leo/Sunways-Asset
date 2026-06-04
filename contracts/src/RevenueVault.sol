@@ -17,6 +17,8 @@ contract RevenueVault is AccessControl, ReentrancyGuard {
 
     /// @notice Total native-token revenue ever deposited for each station.
     mapping(uint256 stationId => uint256 amount) public totalDeposited;
+    /// @notice Sum of all native-token revenue ever deposited across all stations.
+    uint256 public totalGlobalDeposited;
     /// @notice Reserved for station-level accounting of claimed revenue.
     mapping(uint256 stationId => uint256 amount) public totalClaimed;
     /// @notice Native-token balance each account can currently withdraw.
@@ -50,6 +52,7 @@ contract RevenueVault is AccessControl, ReentrancyGuard {
         address beneficiary = stationNFT.ownerOf(stationId);
         claimable[beneficiary] += msg.value;
         totalDeposited[stationId] += msg.value;
+        totalGlobalDeposited += msg.value;
 
         emit RevenueDeposited(stationId, msg.sender, beneficiary, msg.value);
     }

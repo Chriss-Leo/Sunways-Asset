@@ -217,7 +217,14 @@ func (s *Server) getStation(c *gin.Context) {
 }
 
 func (s *Server) dashboardSummary(c *gin.Context) {
-	summary, err := s.store.DashboardSummary()
+	account := c.Query("account")
+	var summary repository.DashboardSummary
+	var err error
+	if account != "" {
+		summary, err = s.store.DashboardSummaryByAccount(account)
+	} else {
+		summary, err = s.store.DashboardSummary()
+	}
 	if err != nil {
 		writeError(c, http.StatusInternalServerError, "failed to load dashboard summary")
 		return

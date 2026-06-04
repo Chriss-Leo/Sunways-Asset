@@ -224,8 +224,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
-export async function getDashboardSummary() {
-  return request<DashboardSummary>("/dashboard/summary");
+export async function getDashboardSummary(account?: string) {
+  const query = account ? `?account=${encodeURIComponent(account)}` : "";
+  return request<DashboardSummary>(`/dashboard/summary${query}`);
 }
 
 export async function getStations() {

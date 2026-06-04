@@ -3,13 +3,14 @@ pragma solidity ^0.8.24;
 
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import {ERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import {ERC721Pausable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Pausable.sol";
 import {ERC721URIStorage} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 
 /// @title Sunways Power Station NFT
 /// @notice ERC721 registry for renewable-energy assets that back revenue and certificate flows.
 /// @dev Token IDs start at 1 so a zero value can safely represent "not registered" off-chain.
-contract PowerStationNFT is ERC721URIStorage, ERC721Pausable, AccessControl {
+contract PowerStationNFT is ERC721URIStorage, ERC721Enumerable, ERC721Pausable, AccessControl {
     /// @notice Lifecycle state used by operators to reflect station availability.
     enum StationStatus {
         Pending,
@@ -135,10 +136,10 @@ contract PowerStationNFT is ERC721URIStorage, ERC721Pausable, AccessControl {
         _unpause();
     }
 
-    /// @dev Resolves the ERC721 and pausable transfer hooks required by OpenZeppelin v5.
+    /// @dev Resolves the ERC721, enumerable, and pausable transfer hooks required by OpenZeppelin v5.
     function _update(address to, uint256 tokenId, address auth)
         internal
-        override(ERC721, ERC721Pausable)
+        override(ERC721, ERC721Enumerable, ERC721Pausable)
         returns (address)
     {
         return super._update(to, tokenId, auth);
@@ -149,11 +150,24 @@ contract PowerStationNFT is ERC721URIStorage, ERC721Pausable, AccessControl {
         return super.tokenURI(tokenId);
     }
 
-    /// @dev Reports support for ERC721, metadata, and access-control interfaces.
+    /// @notice Returns the total number of stations ever registered (includes burned tokens).
+    function totalStations() external view returns (uint256) {
+        return _nextStationId - 1;
+    }
+
+    /// @dev Required by ERC721Enumerable to update enumerable state on balance changes.
+    function _increaseBalance(address account, uint128 value)
+        internal
+        override(ERC721, ERC721Enumerable)
+    {
+        super._increaseBalance(account, value);
+    }
+
+    /// @dev Reports support for ERC721, enumerable, metadata, and access-control interfaces.
     function supportsInterface(bytes4 interfaceId)
         public
         view
-        override(ERC721, ERC721URIStorage, AccessControl)
+        override(ERC721, ERC721Enumerable, ERC721URIStorage, AccessControl)
         returns (bool)
     {
         return super.supportsInterface(interfaceId);

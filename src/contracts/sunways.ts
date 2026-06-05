@@ -1,9 +1,11 @@
 import type { Abi, Address } from "viem";
 import localChain from "../../config/chains.local.json";
-import carbonCreditTokenAbiJson from "./CarbonCreditToken.abi.json";
-import greenCertificateAbiJson from "./GreenCertificate.abi.json";
-import powerStationNFTAbiJson from "./PowerStationNFT.abi.json";
-import revenueVaultAbiJson from "./RevenueVault.abi.json";
+
+// ABI imported from contracts/abis/ — single source of truth, extracted from forge build output.
+import powerStationNFTAbiJson from "../../contracts/abis/PowerStationNFT.json";
+import revenueVaultAbiJson from "../../contracts/abis/RevenueVault.json";
+import carbonCreditTokenAbiJson from "../../contracts/abis/CarbonCreditToken.json";
+import greenCertificateAbiJson from "../../contracts/abis/GreenCertificate.json";
 
 export type SunwaysContractName =
   | "PowerStationNFT"

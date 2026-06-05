@@ -51,7 +51,7 @@ src/
   hooks/           # 自定义 React hooks
   services/        # API 调用层
   config/          # wagmi 配置、链配置
-  contracts/       # 合约 ABI JSON 文件
+  contracts/       # 合约 ABI 导入（单一来源：contracts/abis/）
   i18n/            # 国际化（locales/en.ts、zh.ts）
   data/            # Mock 数据
   utils/           # 工具函数
@@ -79,7 +79,7 @@ docs/              # 人类阅读的详细技术文档
 - **后端**: `.env` 放 `backend/.env`，不要提交到 Git；GORM AutoMigrate 在启动时自动建表
 - **国际化**: 所有 UI 文字用 `useT()` 的嵌套 key，如 `useT("wallet.title")`，不要硬编码中英文
 - **事件去重**: 链上事件用 `(tx_hash, log_index)` 唯一键去重
-- **路径别名**: `@/*` → `./src/*`
+- **ABI 单一来源**: 前后端都从 `contracts/abis/` 读取 ABI（由 `contracts/scripts/extract-abis.sh` 从 forge 编译产物提取），不手动复制或硬编码
 
 # 当前开发进度
 

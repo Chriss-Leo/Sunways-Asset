@@ -84,7 +84,7 @@ sunways-asset/
       trading/            # P2P 能源交易、订单、撮合、成交
       blockchain/         # 链底层封装，只暴露稳定接口给业务域
         client/           # eth client / rpc provider / chain config
-        abi/              # ABI json 或 abigen 输入
+        abi/              # ABI 加载器（从 contracts/abis/ 读取）
         contract/         # 合约 Go binding / 合约服务封装
         tx/               # 发交易、nonce、gas、receipt、重试
         listener/         # 链事件监听、区块扫描、reorg 处理
@@ -99,7 +99,7 @@ sunways-asset/
     app/                  # 中期迁移目标
     pages/                # 当前可运行结构
     components/
-    contracts/            # ABI/type 输出
+    contracts/            # 合约配置（sunways.ts 从 contracts/abis/ 导入 ABI）
     hooks/
     services/
     utils/
@@ -232,7 +232,7 @@ internal/blockchain/
 `blockchain` 子目录职责建议：
 
 - `client`：创建 RPC client、管理 chain id、确认数、fallback RPC、健康检查。
-- `abi`：保存 ABI JSON；建议由 Foundry 编译产物自动同步，避免手动复制出错。
+- `abi`：ABI 加载器，从 `contracts/abis/` 读取提取后的 ABI JSON（已实现：`contractabi.Load()`）。
 - `contract`：封装合约读写方法，例如 `AssetRegistryService`、`RevenueVaultService`。
 - `tx`：统一处理 nonce、gas 估算、EIP-1559 fee、receipt 等待、失败重试、交易幂等键。
 - `listener`：按区块扫描事件、处理确认数、断点续扫、reorg 回滚。
@@ -351,7 +351,7 @@ PATCH /admin/stations/:id/operation-status
 ### 6.2 短期任务
 
 1. 在 `config/` 增加本地链配置。
-2. 在 `src/contracts/` 放入 ABI 和合约地址映射。
+2. 在 `src/contracts/` 配置 ABI 导入（从 `contracts/abis/` 读取）和合约地址映射。
 3. 在 `_app.tsx` 配置 Wagmi、RainbowKit、QueryClient Provider。
 4. 首页替换默认模板，改成资产仪表盘。
 5. 增加资产详情页、钱包持仓页、收益领取页。
@@ -727,8 +727,7 @@ sessions
 contracts/script/DeployLocal.s.sol
 config/chains.local.json
 config/contracts.local.json
-src/contracts/AssetRegistry.abi.json
-backend/internal/blockchain/abi/AssetRegistry.json
+contracts/abis/PowerStationNFT.json  # 前后端 ABI 单一来源
 ```
 
 部署结果建议格式：

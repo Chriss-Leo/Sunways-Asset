@@ -4,14 +4,16 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"errors"
+	"fmt"
 	"math/big"
 	"strings"
 	"time"
 
 	"sunways-asset/backend/internal/blockchain"
+	contractabi "sunways-asset/backend/internal/blockchain/abi"
 
 	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/accounts/abi"
+	gethabi "github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -20,32 +22,24 @@ import (
 
 var ErrDisabled = errors.New("admin transaction service is not configured")
 
-const powerStationABI = `[
-  {"type":"function","name":"registerStation","stateMutability":"nonpayable","inputs":[{"name":"owner","type":"address"},{"name":"name","type":"string"},{"name":"region","type":"string"},{"name":"capacityKw","type":"uint256"},{"name":"commissionedAt","type":"uint64"},{"name":"metadataURI","type":"string"}],"outputs":[{"name":"stationId","type":"uint256"}]},
-  {"type":"function","name":"updateStationStatus","stateMutability":"nonpayable","inputs":[{"name":"stationId","type":"uint256"},{"name":"status","type":"uint8"}],"outputs":[]},
-  {"type":"event","name":"StationRegistered","inputs":[{"name":"stationId","type":"uint256","indexed":true},{"name":"owner","type":"address","indexed":true},{"name":"operator","type":"address","indexed":true},{"name":"metadataURI","type":"string","indexed":false},{"name":"capacityKw","type":"uint256","indexed":false}]}
-]`
+// contractsAbisDir is the path to extracted ABIs relative to the backend
+// working directory (backend/).
+const contractsAbisDir = "../contracts/abis"
 
-const revenueABI = `[
-  {"type":"function","name":"depositNative","stateMutability":"payable","inputs":[{"name":"stationId","type":"uint256"}],"outputs":[]}
-]`
-
-const carbonABI = `[
-  {"type":"function","name":"mintCarbonCredits","stateMutability":"nonpayable","inputs":[{"name":"account","type":"address"},{"name":"amount","type":"uint256"},{"name":"stationId","type":"uint256"},{"name":"evidenceURI","type":"string"}],"outputs":[]},
-  {"type":"function","name":"burn","stateMutability":"nonpayable","inputs":[{"name":"amount","type":"uint256"}],"outputs":[]}
-]`
-
-const certificateABI = `[
-  {"type":"function","name":"issueCertificate","stateMutability":"nonpayable","inputs":[{"name":"account","type":"address"},{"name":"stationId","type":"uint256"},{"name":"amount","type":"uint256"},{"name":"certificateType","type":"string"},{"name":"period","type":"string"},{"name":"evidenceURI","type":"string"}],"outputs":[{"name":"certificateId","type":"uint256"}]},
-  {"type":"function","name":"burn","stateMutability":"nonpayable","inputs":[{"name":"account","type":"address"},{"name":"id","type":"uint256"},{"name":"amount","type":"uint256"}],"outputs":[]}
-]`
+// contractNames lists the contracts whose ABIs are loaded for admin transactions.
+var contractNames = []string{
+	"PowerStationNFT",
+	"RevenueVault",
+	"CarbonCreditToken",
+	"GreenCertificate",
+}
 
 type Service struct {
 	chain      blockchain.Config
 	client     *ethclient.Client
 	privateKey *ecdsa.PrivateKey
 	from       common.Address
-	abis       map[string]abi.ABI
+	abis       map[string]gethabi.ABI
 }
 
 func New(chain blockchain.Config, client *ethclient.Client, privateKeyHex string) (*Service, error) {
@@ -62,17 +56,12 @@ func New(chain blockchain.Config, client *ethclient.Client, privateKeyHex string
 		client:     client,
 		privateKey: key,
 		from:       crypto.PubkeyToAddress(*publicKey),
-		abis:       map[string]abi.ABI{},
+		abis:       map[string]gethabi.ABI{},
 	}
-	for name, raw := range map[string]string{
-		"PowerStationNFT":   powerStationABI,
-		"RevenueVault":      revenueABI,
-		"CarbonCreditToken": carbonABI,
-		"GreenCertificate":  certificateABI,
-	} {
-		parsed, err := abi.JSON(strings.NewReader(raw))
+	for _, name := range contractNames {
+		parsed, err := contractabi.Load(contractsAbisDir, name)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("load %s ABI: %w", name, err)
 		}
 		service.abis[name] = parsed
 	}

@@ -6,85 +6,26 @@ import (
 	"fmt"
 	"log"
 	"math/big"
-	"strings"
 	"time"
 
 	"sunways-asset/backend/internal/blockchain"
+	contractabi "sunways-asset/backend/internal/blockchain/abi"
 	"sunways-asset/backend/internal/repository"
 
 	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/accounts/abi"
+	gethabi "github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
-const powerStationABI = `[
-  {"type":"event","name":"StationRegistered","inputs":[
-    {"name":"stationId","type":"uint256","indexed":true},
-    {"name":"owner","type":"address","indexed":true},
-    {"name":"operator","type":"address","indexed":true},
-    {"name":"metadataURI","type":"string","indexed":false},
-    {"name":"capacityKw","type":"uint256","indexed":false}
-  ]},
-  {"type":"event","name":"StationStatusChanged","inputs":[
-    {"name":"stationId","type":"uint256","indexed":true},
-    {"name":"status","type":"uint8","indexed":false}
-  ]},
-  {"type":"function","name":"station","stateMutability":"view","inputs":[{"name":"stationId","type":"uint256"}],"outputs":[{"type":"tuple","components":[{"name":"name","type":"string"},{"name":"region","type":"string"},{"name":"capacityKw","type":"uint256"},{"name":"commissionedAt","type":"uint64"},{"name":"status","type":"uint8"}]}]}
-]`
-
-const revenueVaultABI = `[
-  {"type":"event","name":"RevenueDeposited","inputs":[
-    {"name":"stationId","type":"uint256","indexed":true},
-    {"name":"payer","type":"address","indexed":true},
-    {"name":"beneficiary","type":"address","indexed":true},
-    {"name":"amount","type":"uint256","indexed":false}
-  ]},
-  {"type":"event","name":"RevenueClaimed","inputs":[
-    {"name":"account","type":"address","indexed":true},
-    {"name":"amount","type":"uint256","indexed":false}
-  ]}
-]`
-
-const carbonCreditABI = `[
-  {"type":"event","name":"CarbonCreditsMinted","inputs":[
-    {"name":"account","type":"address","indexed":true},
-    {"name":"amount","type":"uint256","indexed":false},
-    {"name":"stationId","type":"uint256","indexed":true},
-    {"name":"evidenceURI","type":"string","indexed":false}
-  ]},
-  {"type":"event","name":"Transfer","inputs":[
-    {"name":"from","type":"address","indexed":true},
-    {"name":"to","type":"address","indexed":true},
-    {"name":"value","type":"uint256","indexed":false}
-  ]}
-]`
-
-const greenCertificateABI = `[
-  {"type":"event","name":"CertificateIssued","inputs":[
-    {"name":"certificateId","type":"uint256","indexed":true},
-    {"name":"stationId","type":"uint256","indexed":true},
-    {"name":"account","type":"address","indexed":true},
-    {"name":"amount","type":"uint256","indexed":false},
-    {"name":"certificateType","type":"string","indexed":false},
-    {"name":"period","type":"string","indexed":false},
-    {"name":"evidenceURI","type":"string","indexed":false}
-  ]},
-  {"type":"event","name":"TransferSingle","inputs":[
-    {"name":"operator","type":"address","indexed":true},
-    {"name":"from","type":"address","indexed":true},
-    {"name":"to","type":"address","indexed":true},
-    {"name":"id","type":"uint256","indexed":false},
-    {"name":"value","type":"uint256","indexed":false}
-  ]}
-]`
+const contractsAbisDir = "../contracts/abis"
 
 type Indexer struct {
 	chain   blockchain.Config
 	client  *ethclient.Client
 	store   *repository.Store
-	abis    map[string]abi.ABI
+	abis    map[string]gethabi.ABI
 	address map[common.Address]string
 }
 
@@ -97,14 +38,14 @@ type RunOptions struct {
 }
 
 func New(chain blockchain.Config, client *ethclient.Client, store *repository.Store) (*Indexer, error) {
-	abis := make(map[string]abi.ABI)
-	for name, raw := range map[string]string{
-		"PowerStationNFT":   powerStationABI,
-		"RevenueVault":      revenueVaultABI,
-		"CarbonCreditToken": carbonCreditABI,
-		"GreenCertificate":  greenCertificateABI,
+	abis := make(map[string]gethabi.ABI)
+	for _, name := range []string{
+		"PowerStationNFT",
+		"RevenueVault",
+		"CarbonCreditToken",
+		"GreenCertificate",
 	} {
-		parsed, err := abi.JSON(strings.NewReader(raw))
+		parsed, err := contractabi.Load(contractsAbisDir, name)
 		if err != nil {
 			return nil, err
 		}
@@ -286,7 +227,7 @@ func (i *Indexer) handleLog(ctx context.Context, log types.Log) error {
 	}
 }
 
-func (i *Indexer) handleStationRegistered(ctx context.Context, contractABI abi.ABI, log types.Log) error {
+func (i *Indexer) handleStationRegistered(ctx context.Context, contractABI gethabi.ABI, log types.Log) error {
 	event := contractABI.Events["StationRegistered"]
 	values := map[string]any{}
 	if err := contractABI.UnpackIntoMap(values, event.Name, log.Data); err != nil {
@@ -331,7 +272,7 @@ func (i *Indexer) handleStationRegistered(ctx context.Context, contractABI abi.A
 	})
 }
 
-func (i *Indexer) handleStationStatusChanged(contractABI abi.ABI, log types.Log) error {
+func (i *Indexer) handleStationStatusChanged(contractABI gethabi.ABI, log types.Log) error {
 	values := map[string]any{}
 	if err := contractABI.UnpackIntoMap(values, "StationStatusChanged", log.Data); err != nil {
 		return err
@@ -347,7 +288,7 @@ func (i *Indexer) handleStationStatusChanged(contractABI abi.ABI, log types.Log)
 	return i.store.UpdateStationChainStatus(i.chain.ChainID, stationID.Uint64(), statusLabel(status))
 }
 
-func (i *Indexer) handleRevenueDeposited(contractABI abi.ABI, log types.Log) error {
+func (i *Indexer) handleRevenueDeposited(contractABI gethabi.ABI, log types.Log) error {
 	values := map[string]any{}
 	if err := contractABI.UnpackIntoMap(values, "RevenueDeposited", log.Data); err != nil {
 		return err
@@ -369,7 +310,7 @@ func (i *Indexer) handleRevenueDeposited(contractABI abi.ABI, log types.Log) err
 	return i.store.CreateRevenueDeposit(deposit)
 }
 
-func (i *Indexer) handleRevenueClaimed(contractABI abi.ABI, log types.Log) error {
+func (i *Indexer) handleRevenueClaimed(contractABI gethabi.ABI, log types.Log) error {
 	values := map[string]any{}
 	if err := contractABI.UnpackIntoMap(values, "RevenueClaimed", log.Data); err != nil {
 		return err
@@ -388,7 +329,7 @@ func (i *Indexer) handleRevenueClaimed(contractABI abi.ABI, log types.Log) error
 	return i.store.CreateRevenueClaim(claim)
 }
 
-func (i *Indexer) handleCarbonCreditsMinted(contractABI abi.ABI, log types.Log) error {
+func (i *Indexer) handleCarbonCreditsMinted(contractABI gethabi.ABI, log types.Log) error {
 	values := map[string]any{}
 	if err := contractABI.UnpackIntoMap(values, "CarbonCreditsMinted", log.Data); err != nil {
 		return err
@@ -409,7 +350,7 @@ func (i *Indexer) handleCarbonCreditsMinted(contractABI abi.ABI, log types.Log) 
 	return i.store.CreateCarbonCreditIssuance(issuance)
 }
 
-func (i *Indexer) handleCarbonTransfer(contractABI abi.ABI, log types.Log) error {
+func (i *Indexer) handleCarbonTransfer(contractABI gethabi.ABI, log types.Log) error {
 	to := topicAddress(log.Topics[2])
 	if to != (common.Address{}) {
 		return nil
@@ -433,7 +374,7 @@ func (i *Indexer) handleCarbonTransfer(contractABI abi.ABI, log types.Log) error
 	return i.store.CreateCarbonCreditRetirement(retirement)
 }
 
-func (i *Indexer) handleCertificateIssued(contractABI abi.ABI, log types.Log) error {
+func (i *Indexer) handleCertificateIssued(contractABI gethabi.ABI, log types.Log) error {
 	values := map[string]any{}
 	if err := contractABI.UnpackIntoMap(values, "CertificateIssued", log.Data); err != nil {
 		return err
@@ -457,7 +398,7 @@ func (i *Indexer) handleCertificateIssued(contractABI abi.ABI, log types.Log) er
 	return i.store.CreateGreenCertificateIssuance(issuance)
 }
 
-func (i *Indexer) handleCertificateTransfer(contractABI abi.ABI, log types.Log) error {
+func (i *Indexer) handleCertificateTransfer(contractABI gethabi.ABI, log types.Log) error {
 	to := topicAddress(log.Topics[3])
 	if to != (common.Address{}) {
 		return nil

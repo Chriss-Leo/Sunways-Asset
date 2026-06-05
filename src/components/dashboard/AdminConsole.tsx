@@ -8,6 +8,9 @@ import {
   burnCarbonCredits,
   burnGreenCertificate,
   depositRevenue,
+  distributeDividends,
+  fundraisingDeposit,
+  fundraisingWithdraw,
   getCertificateIssuances,
   getStations,
   issueGreenCertificate,
@@ -203,6 +206,9 @@ export function AdminConsole() {
     stationId: "1",
     status: "1",
   });
+  const [fundDeposit, setFundDeposit] = useState({ amountEth: "0.5" });
+  const [fundWithdraw, setFundWithdraw] = useState({ amountEth: "0.1" });
+  const [dividend, setDividend] = useState({ amountEth: "0.1" });
   const [burnCert, setBurnCert] = useState({
     amount: "1",
     certificateId: "",
@@ -311,6 +317,34 @@ export function AdminConsole() {
         certificateId: Number(burnCert.certificateId),
       }),
     onSuccess: invalidate,
+  });
+  const fundraisingInvalidate = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["fundraising-deposits"] }),
+      queryClient.invalidateQueries({ queryKey: ["fundraising-withdrawals"] }),
+      queryClient.invalidateQueries({ queryKey: ["fundraising-dividend-distributions"] }),
+      queryClient.invalidateQueries({ queryKey: ["fundraising-dividend-claims"] }),
+    ]);
+  const fundDepositMutation = useMutation({
+    mutationFn: () =>
+      fundraisingDeposit({
+        amountWei: parseEther(fundDeposit.amountEth).toString(),
+      }),
+    onSuccess: fundraisingInvalidate,
+  });
+  const fundWithdrawMutation = useMutation({
+    mutationFn: () =>
+      fundraisingWithdraw({
+        amountWei: parseEther(fundWithdraw.amountEth).toString(),
+      }),
+    onSuccess: fundraisingInvalidate,
+  });
+  const dividendMutation = useMutation({
+    mutationFn: () =>
+      distributeDividends({
+        amountWei: parseEther(dividend.amountEth).toString(),
+      }),
+    onSuccess: fundraisingInvalidate,
   });
 
   const submit = (event: FormEvent<HTMLFormElement>, action: () => void) => {
@@ -688,6 +722,111 @@ export function AdminConsole() {
             <TxResult
               error={chainStatusMutation.error}
               value={chainStatusMutation.data?.txHash}
+            />
+          </form>
+        </ActionCard>
+
+        <ActionCard
+          accent="lime"
+          detail={t("admin.fundraisingDepositDetail")}
+          eyebrow={t("admin.fundraising")}
+          title={t("admin.fundraisingDeposit")}
+        >
+          <form
+            onSubmit={(event) => submit(event, () => fundDepositMutation.mutate())}
+          >
+            <div className="grid gap-3 sm:grid-cols-1">
+              <Field
+                label={t("admin.amountEth")}
+                onChange={(amountEth) =>
+                  setFundDeposit((value) => ({ ...value, amountEth }))
+                }
+                value={fundDeposit.amountEth}
+              />
+            </div>
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <p className="text-xs text-zinc-500">
+                {t("admin.fundraisingDepositHint")}
+              </p>
+              <PrimaryButton disabled={fundDepositMutation.isPending}>
+                {fundDepositMutation.isPending
+                  ? t("admin.submitting")
+                  : t("admin.deposit")}
+              </PrimaryButton>
+            </div>
+            <TxResult
+              error={fundDepositMutation.error}
+              value={fundDepositMutation.data?.txHash}
+            />
+          </form>
+        </ActionCard>
+
+        <ActionCard
+          accent="amber"
+          detail={t("admin.fundraisingWithdrawDetail")}
+          eyebrow={t("admin.fundraising")}
+          title={t("admin.fundraisingWithdraw")}
+        >
+          <form
+            onSubmit={(event) => submit(event, () => fundWithdrawMutation.mutate())}
+          >
+            <div className="grid gap-3 sm:grid-cols-1">
+              <Field
+                label={t("admin.amountEth")}
+                onChange={(amountEth) =>
+                  setFundWithdraw((value) => ({ ...value, amountEth }))
+                }
+                value={fundWithdraw.amountEth}
+              />
+            </div>
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <p className="text-xs text-zinc-500">
+                {t("admin.fundraisingWithdrawHint")}
+              </p>
+              <PrimaryButton disabled={fundWithdrawMutation.isPending}>
+                {fundWithdrawMutation.isPending
+                  ? t("admin.submitting")
+                  : t("admin.withdraw")}
+              </PrimaryButton>
+            </div>
+            <TxResult
+              error={fundWithdrawMutation.error}
+              value={fundWithdrawMutation.data?.txHash}
+            />
+          </form>
+        </ActionCard>
+
+        <ActionCard
+          accent="sky"
+          detail={t("admin.distributeDividendsDetail")}
+          eyebrow={t("admin.fundraising")}
+          title={t("admin.distributeDividends")}
+        >
+          <form
+            onSubmit={(event) => submit(event, () => dividendMutation.mutate())}
+          >
+            <div className="grid gap-3 sm:grid-cols-1">
+              <Field
+                label={t("admin.amountEth")}
+                onChange={(amountEth) =>
+                  setDividend((value) => ({ ...value, amountEth }))
+                }
+                value={dividend.amountEth}
+              />
+            </div>
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <p className="text-xs text-zinc-500">
+                {t("admin.distributeDividendsHint")}
+              </p>
+              <PrimaryButton disabled={dividendMutation.isPending}>
+                {dividendMutation.isPending
+                  ? t("admin.submitting")
+                  : t("admin.distributeDividends")}
+              </PrimaryButton>
+            </div>
+            <TxResult
+              error={dividendMutation.error}
+              value={dividendMutation.data?.txHash}
             />
           </form>
         </ActionCard>

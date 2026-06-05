@@ -61,6 +61,12 @@ const zh = {
     mockMonthlySettlement: "模拟月度结算",
     pendingOracle: "待预言机认证",
     issuanceBatch: "2026-Q2 发行批次",
+    fundraisingPool: "集资资金池",
+    fundraisingDividends: "集资分红",
+    fundTotalDeposited: "资金池中 ETH 存款总额",
+    fundYourBalance: "你的 SFS 代币余额",
+    fundTotalDistributed: "已派发 ETH 分红总额",
+    fundYourClaimable: "你可领取的分红",
     backend: "后端",
     onChain: "链上",
     myAssets: "我的资产",
@@ -126,6 +132,16 @@ const zh = {
     certificateRetired: "证书 #{id} 已销毁",
     stations: "{count} 个电站",
     indexedPill: "已索引 {count} 个",
+    fundraising: "集资",
+    fundraisingActivity: "集资活动",
+    dividendActivity: "分红活动",
+    waitingForFundraising: "等待集资事件",
+    waitingForDividends: "等待分红事件",
+    fundraisingDeposited: "集资存入",
+    fundraisingWithdrawn: "集资取回",
+    dividendsDistributed: "分红派发",
+    dividendClaimed: "分红领取",
+    holders: "持有者",
   },
 
   admin: {
@@ -208,6 +224,20 @@ const zh = {
       "将证书转移到零地址以销毁。管理员钱包必须持有该证书。",
     certificateId: "证书 ID",
     burnsErc1155: "将 ERC-1155 转移到零地址。",
+    fundraising: "集资",
+    fundraisingDeposit: "存入 ETH → 铸造 SFS",
+    fundraisingDepositDetail:
+      "向资金池发送 ETH，按 1:1 获得 SFS 代币。管理员钱包将成为持币者。",
+    fundraisingDepositHint: "按 1:1 为管理员钱包铸造 SFS 代币。",
+    fundraisingWithdraw: "销毁 SFS → 取回 ETH",
+    fundraisingWithdrawDetail:
+      "销毁管理员钱包持有的 SFS 代币，按 1:1 从资金池取回 ETH。",
+    fundraisingWithdrawHint: "从管理员钱包销毁 SFS 代币。",
+    distributeDividends: "派发分红",
+    distributeDividendsDetail:
+      "按持币比例向所有 SFS 代币持有者派发 ETH 分红。遍历所有持有者地址。",
+    distributeDividendsHint:
+      "遍历所有持有者（O(n) — 后续可用于 Gas 对比）。",
   },
 
   platform: {

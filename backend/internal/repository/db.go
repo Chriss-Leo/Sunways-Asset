@@ -64,6 +64,10 @@ func AutoMigrate(db *gorm.DB) error {
 		&CarbonCreditRetirement{},
 		&GreenCertificateIssuance{},
 		&GreenCertificateRetirement{},
+		&FundraisingDeposit{},
+		&FundraisingWithdrawal{},
+		&FundraisingDividendDistribution{},
+		&FundraisingDividendClaim{},
 		&UserAssetSummary{},
 	)
 }

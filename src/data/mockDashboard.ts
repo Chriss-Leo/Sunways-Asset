@@ -25,4 +25,10 @@ export const contractRows = [
     standard: "ERC-1155",
     address: sunwaysContracts.GreenCertificate.address,
   },
+  {
+    name: "FundraisingPool",
+    purpose: "Fundraising deposit & dividends",
+    standard: "ERC-20",
+    address: sunwaysContracts.FundraisingPool.address,
+  },
 ] as const;

@@ -6,6 +6,7 @@ import { requiredChain } from "@/config/chains";
 import { useT } from "@/i18n";
 import {
   carbonCreditTokenAbi,
+  fundraisingPoolAbi,
   greenCertificateAbi,
   powerStationNFTAbi,
   revenueVaultAbi,
@@ -19,6 +20,7 @@ const nftAddr = sunwaysContracts.PowerStationNFT.address;
 const vaultAddr = sunwaysContracts.RevenueVault.address;
 const carbonAddr = sunwaysContracts.CarbonCreditToken.address;
 const certAddr = sunwaysContracts.GreenCertificate.address;
+const fundAddr = sunwaysContracts.FundraisingPool.address;
 
 function shortAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -150,6 +152,37 @@ export function PortfolioOverview() {
     query: { ...query, enabled: scope === "global" },
   });
 
+  // ── FundraisingPool ──
+  const myFundBalanceQ = useReadContract({
+    address: fundAddr,
+    abi: fundraisingPoolAbi,
+    functionName: "balanceOf",
+    args: account ? [account] : undefined,
+    query: { ...query, enabled: query.enabled && scope === "personal" && !!account },
+  });
+
+  const myFundClaimableQ = useReadContract({
+    address: fundAddr,
+    abi: fundraisingPoolAbi,
+    functionName: "claimableDividends",
+    args: account ? [account] : undefined,
+    query: { ...query, enabled: query.enabled && scope === "personal" && !!account },
+  });
+
+  const globalFundSupplyQ = useReadContract({
+    address: fundAddr,
+    abi: fundraisingPoolAbi,
+    functionName: "totalSupply",
+    query: { ...query, enabled: scope === "global" },
+  });
+
+  const globalFundDividendsQ = useReadContract({
+    address: fundAddr,
+    abi: fundraisingPoolAbi,
+    functionName: "totalDividendsDistributed",
+    query: { ...query, enabled: scope === "global" },
+  });
+
   // ── Resolve values ──
   const isPersonal = scope === "personal" && !!account;
 
@@ -185,6 +218,18 @@ export function PortfolioOverview() {
         ? ((globalCertsQ.data as bigint | undefined)?.toLocaleString() ?? "0")
         : "—";
 
+  const fundBalanceValue: string = isPersonal
+    ? (formatWeiBigint(myFundBalanceQ.data as bigint | undefined) ?? "0 ETH")
+    : scope === "global"
+      ? (formatWeiBigint(globalFundSupplyQ.data as bigint | undefined) ?? "0 ETH")
+      : "—";
+
+  const fundDividendsValue: string = isPersonal
+    ? (formatWeiBigint(myFundClaimableQ.data as bigint | undefined) ?? "0 ETH")
+    : scope === "global"
+      ? (formatWeiBigint(globalFundDividendsQ.data as bigint | undefined) ?? "0 ETH")
+      : "—";
+
   const source: string | null = backendOk ? t("portfolio.backend") : t("portfolio.onChain");
 
   type Metric = {
@@ -218,6 +263,22 @@ export function PortfolioOverview() {
       value: certsValue,
       detail: t("portfolio.issuanceBatch"),
       tone: "amber",
+    },
+    {
+      label: t("portfolio.fundraisingPool"),
+      value: fundBalanceValue,
+      detail: isPersonal
+        ? t("portfolio.fundYourBalance")
+        : t("portfolio.fundTotalDeposited"),
+      tone: "lime",
+    },
+    {
+      label: t("portfolio.fundraisingDividends"),
+      value: fundDividendsValue,
+      detail: isPersonal
+        ? t("portfolio.fundYourClaimable")
+        : t("portfolio.fundTotalDistributed"),
+      tone: "sky",
     },
   ];
 
@@ -271,7 +332,7 @@ export function PortfolioOverview() {
       </div>
 
       {/* ── Metric cards ── */}
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {metrics.map((metric) => (
           <article
             className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm"

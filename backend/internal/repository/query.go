@@ -303,6 +303,34 @@ func (s *Store) CreateGreenCertificateRetirement(retirement GreenCertificateReti
 	}).Create(&retirement).Error
 }
 
+func (s *Store) CreateFundraisingDeposit(deposit FundraisingDeposit) error {
+	return s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "tx_hash"}, {Name: "log_index"}},
+		DoNothing: true,
+	}).Create(&deposit).Error
+}
+
+func (s *Store) CreateFundraisingWithdrawal(withdrawal FundraisingWithdrawal) error {
+	return s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "tx_hash"}, {Name: "log_index"}},
+		DoNothing: true,
+	}).Create(&withdrawal).Error
+}
+
+func (s *Store) CreateFundraisingDividendDistribution(distribution FundraisingDividendDistribution) error {
+	return s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "tx_hash"}, {Name: "log_index"}},
+		DoNothing: true,
+	}).Create(&distribution).Error
+}
+
+func (s *Store) CreateFundraisingDividendClaim(claim FundraisingDividendClaim) error {
+	return s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "tx_hash"}, {Name: "log_index"}},
+		DoNothing: true,
+	}).Create(&claim).Error
+}
+
 func (s *Store) UpsertIndexerState(state IndexerState) error {
 	return s.db.Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "chain_id"}, {Name: "name"}},
@@ -447,6 +475,42 @@ func (s *Store) ListGreenCertificateRetirements(limit int) ([]GreenCertificateRe
 	return items, err
 }
 
+func (s *Store) ListFundraisingDeposits(limit int) ([]FundraisingDeposit, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 100
+	}
+	var items []FundraisingDeposit
+	err := s.db.Order("block_number desc, log_index desc").Limit(limit).Find(&items).Error
+	return items, err
+}
+
+func (s *Store) ListFundraisingWithdrawals(limit int) ([]FundraisingWithdrawal, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 100
+	}
+	var items []FundraisingWithdrawal
+	err := s.db.Order("block_number desc, log_index desc").Limit(limit).Find(&items).Error
+	return items, err
+}
+
+func (s *Store) ListFundraisingDividendDistributions(limit int) ([]FundraisingDividendDistribution, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 100
+	}
+	var items []FundraisingDividendDistribution
+	err := s.db.Order("block_number desc, log_index desc").Limit(limit).Find(&items).Error
+	return items, err
+}
+
+func (s *Store) ListFundraisingDividendClaims(limit int) ([]FundraisingDividendClaim, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 100
+	}
+	var items []FundraisingDividendClaim
+	err := s.db.Order("block_number desc, log_index desc").Limit(limit).Find(&items).Error
+	return items, err
+}
+
 func (s *Store) ListUserAssetSummaries(limit int) ([]UserAssetSummary, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 100
@@ -567,7 +631,7 @@ func (s *Store) DashboardSummary() (DashboardSummary, error) {
 
 func (s *Store) RebuildUserAssetSummary(chainID int64) error {
 	var accounts []string
-	for _, model := range []any{&Station{}, &RevenueDeposit{}, &CarbonCreditIssuance{}, &CarbonCreditRetirement{}, &GreenCertificateIssuance{}, &GreenCertificateRetirement{}} {
+	for _, model := range []any{&Station{}, &RevenueDeposit{}, &CarbonCreditIssuance{}, &CarbonCreditRetirement{}, &GreenCertificateIssuance{}, &GreenCertificateRetirement{}, &FundraisingDeposit{}, &FundraisingWithdrawal{}, &FundraisingDividendDistribution{}, &FundraisingDividendClaim{}} {
 		switch model.(type) {
 		case *Station:
 			var rows []Station
@@ -611,6 +675,32 @@ func (s *Store) RebuildUserAssetSummary(chainID int64) error {
 			}
 		case *GreenCertificateRetirement:
 			var rows []GreenCertificateRetirement
+			if err := s.db.Find(&rows).Error; err != nil {
+				return err
+			}
+			for _, row := range rows {
+				accounts = append(accounts, row.Account)
+			}
+		case *FundraisingDeposit:
+			var rows []FundraisingDeposit
+			if err := s.db.Find(&rows).Error; err != nil {
+				return err
+			}
+			for _, row := range rows {
+				accounts = append(accounts, row.Account)
+			}
+		case *FundraisingWithdrawal:
+			var rows []FundraisingWithdrawal
+			if err := s.db.Find(&rows).Error; err != nil {
+				return err
+			}
+			for _, row := range rows {
+				accounts = append(accounts, row.Account)
+			}
+		case *FundraisingDividendDistribution:
+			continue
+		case *FundraisingDividendClaim:
+			var rows []FundraisingDividendClaim
 			if err := s.db.Find(&rows).Error; err != nil {
 				return err
 			}

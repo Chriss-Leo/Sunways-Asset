@@ -61,6 +61,12 @@ const en = {
     mockMonthlySettlement: "Mock monthly settlement",
     pendingOracle: "Pending oracle attestation",
     issuanceBatch: "2026-Q2 issuance batch",
+    fundraisingPool: "Fundraising Pool",
+    fundraisingDividends: "Fundraising Dividends",
+    fundTotalDeposited: "Total ETH deposited in pool",
+    fundYourBalance: "Your SFS token balance",
+    fundTotalDistributed: "Total ETH dividends distributed",
+    fundYourClaimable: "Your claimable dividends",
     backend: "Backend",
     onChain: "On-chain",
     myAssets: "My Assets",
@@ -126,6 +132,16 @@ const en = {
     certificateRetired: "Certificate #{id} retired",
     stations: "{count} stations",
     indexedPill: "{count} indexed",
+    fundraising: "Fundraising",
+    fundraisingActivity: "Fundraising Activity",
+    dividendActivity: "Dividend Activity",
+    waitingForFundraising: "Waiting for fundraising events",
+    waitingForDividends: "Waiting for dividend events",
+    fundraisingDeposited: "Fundraising deposit",
+    fundraisingWithdrawn: "Fundraising withdrawal",
+    dividendsDistributed: "Dividends distributed",
+    dividendClaimed: "Dividend claimed",
+    holders: "Holders",
   },
 
   admin: {
@@ -208,6 +224,21 @@ const en = {
       "Transfer a certificate to the zero address to effectively burn it. The admin wallet must hold the certificates.",
     certificateId: "Certificate ID",
     burnsErc1155: "Transfers ERC-1155 to zero address.",
+    fundraising: "Fundraising",
+    fundraisingDeposit: "Deposit ETH → Mint SFS",
+    fundraisingDepositDetail:
+      "Send ETH to the pool and receive SFS tokens 1:1. The admin wallet becomes a token holder.",
+    fundraisingDepositHint: "Mints SFS tokens 1:1 for the admin wallet.",
+    fundraisingWithdraw: "Burn SFS → Withdraw ETH",
+    fundraisingWithdrawDetail:
+      "Burn SFS tokens held by the admin wallet and withdraw ETH 1:1 from the pool.",
+    fundraisingWithdrawHint:
+      "Burns SFS tokens from the admin wallet.",
+    distributeDividends: "Distribute Dividends",
+    distributeDividendsDetail:
+      "Send ETH as dividends to all SFS token holders proportionally. Iterates through every holder address.",
+    distributeDividendsHint:
+      "Iterates all holders (O(n) — compare gas later).",
   },
 
   platform: {

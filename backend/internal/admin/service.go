@@ -32,6 +32,7 @@ var contractNames = []string{
 	"RevenueVault",
 	"CarbonCreditToken",
 	"GreenCertificate",
+	"FundraisingPool",
 }
 
 type Service struct {
@@ -119,6 +120,18 @@ type BurnCertificateRequest struct {
 type UpdateStationChainStatusRequest struct {
 	StationID uint64 `json:"stationId"`
 	Status    uint8  `json:"status"`
+}
+
+type DistributeDividendsRequest struct {
+	AmountWei string `json:"amountWei"`
+}
+
+type FundraisingDepositRequest struct {
+	AmountWei string `json:"amountWei"`
+}
+
+type FundraisingWithdrawRequest struct {
+	AmountWei string `json:"amountWei"`
 }
 
 func (s *Service) RegisterStation(ctx context.Context, req RegisterStationRequest) (common.Hash, error) {
@@ -254,6 +267,42 @@ func (s *Service) UpdateStationChainStatus(ctx context.Context, req UpdateStatio
 		return common.Hash{}, err
 	}
 	return s.send(ctx, s.chain.Contracts.PowerStationNFT, big.NewInt(0), data)
+}
+
+func (s *Service) DistributeDividends(ctx context.Context, req DistributeDividendsRequest) (common.Hash, error) {
+	value, ok := new(big.Int).SetString(req.AmountWei, 10)
+	if !ok {
+		return common.Hash{}, errors.New("invalid amount")
+	}
+	data, err := s.abis["FundraisingPool"].Pack("distributeDividends")
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return s.send(ctx, s.chain.Contracts.FundraisingPool, value, data)
+}
+
+func (s *Service) FundraisingDeposit(ctx context.Context, req FundraisingDepositRequest) (common.Hash, error) {
+	value, ok := new(big.Int).SetString(req.AmountWei, 10)
+	if !ok {
+		return common.Hash{}, errors.New("invalid amount")
+	}
+	data, err := s.abis["FundraisingPool"].Pack("deposit")
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return s.send(ctx, s.chain.Contracts.FundraisingPool, value, data)
+}
+
+func (s *Service) FundraisingWithdraw(ctx context.Context, req FundraisingWithdrawRequest) (common.Hash, error) {
+	amount, ok := new(big.Int).SetString(req.AmountWei, 10)
+	if !ok {
+		return common.Hash{}, errors.New("invalid amount")
+	}
+	data, err := s.abis["FundraisingPool"].Pack("withdraw", amount)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return s.send(ctx, s.chain.Contracts.FundraisingPool, big.NewInt(0), data)
 }
 
 func (s *Service) send(ctx context.Context, to common.Address, value *big.Int, data []byte) (common.Hash, error) {

@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 import {Script} from "forge-std/Script.sol";
 import {CarbonCreditToken} from "../src/CarbonCreditToken.sol";
+import {FundraisingPool} from "../src/FundraisingPool.sol";
 import {GreenCertificate} from "../src/GreenCertificate.sol";
 import {PowerStationNFT} from "../src/PowerStationNFT.sol";
 import {RevenueVault} from "../src/RevenueVault.sol";
@@ -15,13 +16,15 @@ contract DeploySunways is Script {
     /// @return revenueVault Native-token revenue vault linked to the station registry.
     /// @return carbonCredit ERC20 carbon-credit token.
     /// @return greenCertificate ERC1155 green-certificate registry.
+    /// @return fundraisingPool ERC20 fundraising share token with dividend distribution.
     function run()
         external
         returns (
             PowerStationNFT stationNFT,
             RevenueVault revenueVault,
             CarbonCreditToken carbonCredit,
-            GreenCertificate greenCertificate
+            GreenCertificate greenCertificate,
+            FundraisingPool fundraisingPool
         )
     {
         vm.startBroadcast();
@@ -32,6 +35,7 @@ contract DeploySunways is Script {
         revenueVault = new RevenueVault(admin, stationNFT);
         carbonCredit = new CarbonCreditToken(admin);
         greenCertificate = new GreenCertificate(admin);
+        fundraisingPool = new FundraisingPool(admin);
 
         vm.stopBroadcast();
     }

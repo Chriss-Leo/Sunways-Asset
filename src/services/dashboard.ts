@@ -106,6 +106,39 @@ export type UserAssetSummary = {
   updatedAt: string;
 };
 
+export type FundraisingDeposit = {
+  account: string;
+  amountWei: string;
+  txHash: string;
+  blockNumber: number;
+  createdAt: string;
+};
+
+export type FundraisingWithdrawal = {
+  account: string;
+  amountWei: string;
+  txHash: string;
+  blockNumber: number;
+  createdAt: string;
+};
+
+export type FundraisingDividendDistribution = {
+  distributor: string;
+  amountWei: string;
+  holderCount: number;
+  txHash: string;
+  blockNumber: number;
+  createdAt: string;
+};
+
+export type FundraisingDividendClaim = {
+  account: string;
+  amountWei: string;
+  txHash: string;
+  blockNumber: number;
+  createdAt: string;
+};
+
 export type IndexerStatus = {
   chainId: number;
   name: string;
@@ -277,6 +310,49 @@ export async function getAccountSummaries() {
 
 export async function getIndexerStatus() {
   return request<IndexerStatus>("/indexer/status");
+}
+
+export async function getFundraisingDeposits() {
+  return request<{ items: FundraisingDeposit[] }>("/fundraising/deposits");
+}
+
+export async function getFundraisingWithdrawals() {
+  return request<{ items: FundraisingWithdrawal[] }>(
+    "/fundraising/withdrawals",
+  );
+}
+
+export async function getFundraisingDividendDistributions() {
+  return request<{ items: FundraisingDividendDistribution[] }>(
+    "/fundraising/dividend-distributions",
+  );
+}
+
+export async function getFundraisingDividendClaims() {
+  return request<{ items: FundraisingDividendClaim[] }>(
+    "/fundraising/dividend-claims",
+  );
+}
+
+export async function fundraisingDeposit(payload: { amountWei: string }) {
+  return request<AdminTxResponse>("/admin/fundraising/deposit", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fundraisingWithdraw(payload: { amountWei: string }) {
+  return request<AdminTxResponse>("/admin/fundraising/withdraw", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function distributeDividends(payload: { amountWei: string }) {
+  return request<AdminTxResponse>("/admin/fundraising/distribute-dividends", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function getOrganizations() {

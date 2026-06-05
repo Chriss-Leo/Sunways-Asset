@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-CONTRACTS=(PowerStationNFT RevenueVault CarbonCreditToken GreenCertificate)
+CONTRACTS=(PowerStationNFT RevenueVault CarbonCreditToken GreenCertificate FundraisingPool)
 mkdir -p abis
 
 for name in "${CONTRACTS[@]}"; do

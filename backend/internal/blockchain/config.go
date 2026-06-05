@@ -19,6 +19,7 @@ type ContractAddresses struct {
 	RevenueVault      common.Address
 	CarbonCreditToken common.Address
 	GreenCertificate  common.Address
+	FundraisingPool   common.Address
 }
 
 type Config struct {
@@ -82,12 +83,17 @@ func parseContracts(values map[string]string) (ContractAddresses, error) {
 	if err != nil {
 		return ContractAddresses{}, err
 	}
+	fundraisingPool, err := parseAddress(values, "FundraisingPool")
+	if err != nil {
+		return ContractAddresses{}, err
+	}
 
 	return ContractAddresses{
 		PowerStationNFT:   powerStationNFT,
 		RevenueVault:      revenueVault,
 		CarbonCreditToken: carbonCreditToken,
 		GreenCertificate:  greenCertificate,
+		FundraisingPool:   fundraisingPool,
 	}, nil
 }
 

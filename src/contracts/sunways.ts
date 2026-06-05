@@ -6,12 +6,14 @@ import powerStationNFTAbiJson from "../../contracts/abis/PowerStationNFT.json";
 import revenueVaultAbiJson from "../../contracts/abis/RevenueVault.json";
 import carbonCreditTokenAbiJson from "../../contracts/abis/CarbonCreditToken.json";
 import greenCertificateAbiJson from "../../contracts/abis/GreenCertificate.json";
+import fundraisingPoolAbiJson from "../../contracts/abis/FundraisingPool.json";
 
 export type SunwaysContractName =
   | "PowerStationNFT"
   | "RevenueVault"
   | "CarbonCreditToken"
-  | "GreenCertificate";
+  | "GreenCertificate"
+  | "FundraisingPool";
 
 export type SunwaysDeployment = {
   chainId: number;
@@ -27,6 +29,7 @@ export const powerStationNFTAbi = powerStationNFTAbiJson as Abi;
 export const revenueVaultAbi = revenueVaultAbiJson as Abi;
 export const carbonCreditTokenAbi = carbonCreditTokenAbiJson as Abi;
 export const greenCertificateAbi = greenCertificateAbiJson as Abi;
+export const fundraisingPoolAbi = fundraisingPoolAbiJson as Abi;
 
 export const sunwaysContracts = {
   PowerStationNFT: {
@@ -44,5 +47,9 @@ export const sunwaysContracts = {
   GreenCertificate: {
     address: sunwaysLocalDeployment.contracts.GreenCertificate,
     abi: greenCertificateAbi,
+  },
+  FundraisingPool: {
+    address: sunwaysLocalDeployment.contracts.FundraisingPool,
+    abi: fundraisingPoolAbi,
   },
 } as const;

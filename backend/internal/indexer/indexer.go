@@ -44,6 +44,7 @@ func New(chain blockchain.Config, client *ethclient.Client, store *repository.St
 		"RevenueVault",
 		"CarbonCreditToken",
 		"GreenCertificate",
+		"FundraisingPool",
 	} {
 		parsed, err := contractabi.Load(contractsAbisDir, name)
 		if err != nil {
@@ -62,6 +63,7 @@ func New(chain blockchain.Config, client *ethclient.Client, store *repository.St
 			chain.Contracts.RevenueVault:      "RevenueVault",
 			chain.Contracts.CarbonCreditToken: "CarbonCreditToken",
 			chain.Contracts.GreenCertificate:  "GreenCertificate",
+			chain.Contracts.FundraisingPool:   "FundraisingPool",
 		},
 	}, nil
 }
@@ -222,6 +224,14 @@ func (i *Indexer) handleLog(ctx context.Context, log types.Log) error {
 		return i.handleCertificateIssued(i.abis["GreenCertificate"], log)
 	case i.abis["GreenCertificate"].Events["TransferSingle"].ID:
 		return i.handleCertificateTransfer(i.abis["GreenCertificate"], log)
+	case i.abis["FundraisingPool"].Events["Deposited"].ID:
+		return i.handleFundraisingDeposited(i.abis["FundraisingPool"], log)
+	case i.abis["FundraisingPool"].Events["Withdrawn"].ID:
+		return i.handleFundraisingWithdrawn(i.abis["FundraisingPool"], log)
+	case i.abis["FundraisingPool"].Events["DividendsDistributed"].ID:
+		return i.handleDividendsDistributed(i.abis["FundraisingPool"], log)
+	case i.abis["FundraisingPool"].Events["DividendClaimed"].ID:
+		return i.handleDividendClaimed(i.abis["FundraisingPool"], log)
 	default:
 		return nil
 	}
@@ -420,6 +430,83 @@ func (i *Indexer) handleCertificateTransfer(contractABI gethabi.ABI, log types.L
 		return err
 	}
 	return i.store.CreateGreenCertificateRetirement(retirement)
+}
+
+func (i *Indexer) handleFundraisingDeposited(contractABI gethabi.ABI, log types.Log) error {
+	values := map[string]any{}
+	if err := contractABI.UnpackIntoMap(values, "Deposited", log.Data); err != nil {
+		return err
+	}
+	deposit := repository.FundraisingDeposit{
+		ChainID:     i.chain.ChainID,
+		Account:     topicAddress(log.Topics[1]).Hex(),
+		AmountWei:   values["amount"].(*big.Int).String(),
+		TxHash:      log.TxHash.Hex(),
+		LogIndex:    uint(log.Index),
+		BlockNumber: log.BlockNumber,
+	}
+	if err := i.store.UpsertChainEvent(i.chainEvent(log, "FundraisingPool", "Deposited", mustJSON(deposit))); err != nil {
+		return err
+	}
+	return i.store.CreateFundraisingDeposit(deposit)
+}
+
+func (i *Indexer) handleFundraisingWithdrawn(contractABI gethabi.ABI, log types.Log) error {
+	values := map[string]any{}
+	if err := contractABI.UnpackIntoMap(values, "Withdrawn", log.Data); err != nil {
+		return err
+	}
+	withdrawal := repository.FundraisingWithdrawal{
+		ChainID:     i.chain.ChainID,
+		Account:     topicAddress(log.Topics[1]).Hex(),
+		AmountWei:   values["amount"].(*big.Int).String(),
+		TxHash:      log.TxHash.Hex(),
+		LogIndex:    uint(log.Index),
+		BlockNumber: log.BlockNumber,
+	}
+	if err := i.store.UpsertChainEvent(i.chainEvent(log, "FundraisingPool", "Withdrawn", mustJSON(withdrawal))); err != nil {
+		return err
+	}
+	return i.store.CreateFundraisingWithdrawal(withdrawal)
+}
+
+func (i *Indexer) handleDividendsDistributed(contractABI gethabi.ABI, log types.Log) error {
+	values := map[string]any{}
+	if err := contractABI.UnpackIntoMap(values, "DividendsDistributed", log.Data); err != nil {
+		return err
+	}
+	distribution := repository.FundraisingDividendDistribution{
+		ChainID:     i.chain.ChainID,
+		Distributor: topicAddress(log.Topics[1]).Hex(),
+		AmountWei:   values["totalAmount"].(*big.Int).String(),
+		HolderCount: values["holderCount"].(*big.Int).Uint64(),
+		TxHash:      log.TxHash.Hex(),
+		LogIndex:    uint(log.Index),
+		BlockNumber: log.BlockNumber,
+	}
+	if err := i.store.UpsertChainEvent(i.chainEvent(log, "FundraisingPool", "DividendsDistributed", mustJSON(distribution))); err != nil {
+		return err
+	}
+	return i.store.CreateFundraisingDividendDistribution(distribution)
+}
+
+func (i *Indexer) handleDividendClaimed(contractABI gethabi.ABI, log types.Log) error {
+	values := map[string]any{}
+	if err := contractABI.UnpackIntoMap(values, "DividendClaimed", log.Data); err != nil {
+		return err
+	}
+	claim := repository.FundraisingDividendClaim{
+		ChainID:     i.chain.ChainID,
+		Account:     topicAddress(log.Topics[1]).Hex(),
+		AmountWei:   values["amount"].(*big.Int).String(),
+		TxHash:      log.TxHash.Hex(),
+		LogIndex:    uint(log.Index),
+		BlockNumber: log.BlockNumber,
+	}
+	if err := i.store.UpsertChainEvent(i.chainEvent(log, "FundraisingPool", "DividendClaimed", mustJSON(claim))); err != nil {
+		return err
+	}
+	return i.store.CreateFundraisingDividendClaim(claim)
 }
 
 type stationDetail struct {

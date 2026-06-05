@@ -8,6 +8,10 @@ import {
   getCarbonRetirements,
   getCertificateIssuances,
   getCertificateRetirements,
+  getFundraisingDeposits,
+  getFundraisingDividendClaims,
+  getFundraisingDividendDistributions,
+  getFundraisingWithdrawals,
   getIndexerStatus,
   getRevenueClaims,
   getRevenueDeposits,
@@ -15,6 +19,10 @@ import {
   getStations,
   type CarbonCreditIssuance,
   type CarbonCreditRetirement,
+  type FundraisingDeposit,
+  type FundraisingDividendClaim,
+  type FundraisingDividendDistribution,
+  type FundraisingWithdrawal,
   type GreenCertificateIssuance,
   type GreenCertificateRetirement,
   type RevenueClaim,
@@ -379,6 +387,30 @@ export function OperationsTables() {
     retry: false,
     refetchInterval: 10_000,
   });
+  const fundDeposits = useQuery({
+    queryKey: ["fundraising-deposits"],
+    queryFn: getFundraisingDeposits,
+    retry: false,
+    refetchInterval: 10_000,
+  });
+  const fundWithdrawals = useQuery({
+    queryKey: ["fundraising-withdrawals"],
+    queryFn: getFundraisingWithdrawals,
+    retry: false,
+    refetchInterval: 10_000,
+  });
+  const fundDistributions = useQuery({
+    queryKey: ["fundraising-dividend-distributions"],
+    queryFn: getFundraisingDividendDistributions,
+    retry: false,
+    refetchInterval: 10_000,
+  });
+  const fundClaims = useQuery({
+    queryKey: ["fundraising-dividend-claims"],
+    queryFn: getFundraisingDividendClaims,
+    retry: false,
+    refetchInterval: 10_000,
+  });
 
   const revenueRecords = [
     ...(deposits.data?.items ?? []).map((item: RevenueDeposit) => (
@@ -420,6 +452,57 @@ export function OperationsTables() {
         value={formatToken(item.amount, "SWC")}
       />
     )),
+  ];
+
+  const fundraisingDepositRecords = (fundDeposits.data?.items ?? []).map(
+    (item: FundraisingDeposit) => (
+      <RecordItem
+        key={`fund-dep-${item.txHash}-${item.blockNumber}`}
+        meta={shortAddress(item.account)}
+        title={t("operations.fundraisingDeposited")}
+        txHash={item.txHash}
+        value={formatWei(item.amountWei)}
+      />
+    ),
+  );
+  const fundraisingWithdrawRecords = (fundWithdrawals.data?.items ?? []).map(
+    (item: FundraisingWithdrawal) => (
+      <RecordItem
+        key={`fund-wd-${item.txHash}-${item.blockNumber}`}
+        meta={shortAddress(item.account)}
+        title={t("operations.fundraisingWithdrawn")}
+        txHash={item.txHash}
+        value={formatWei(item.amountWei)}
+      />
+    ),
+  );
+  const fundraisingRecords = [
+    ...fundraisingDepositRecords,
+    ...fundraisingWithdrawRecords,
+  ];
+  const dividendRecords = [
+    ...(fundDistributions.data?.items ?? []).map(
+      (item: FundraisingDividendDistribution) => (
+        <RecordItem
+          key={`fund-div-${item.txHash}-${item.blockNumber}`}
+          meta={`${t("operations.holders")}: ${item.holderCount}`}
+          title={t("operations.dividendsDistributed")}
+          txHash={item.txHash}
+          value={formatWei(item.amountWei)}
+        />
+      ),
+    ),
+    ...(fundClaims.data?.items ?? []).map(
+      (item: FundraisingDividendClaim) => (
+        <RecordItem
+          key={`fund-claim-${item.txHash}-${item.blockNumber}`}
+          meta={shortAddress(item.account)}
+          title={t("operations.dividendClaimed")}
+          txHash={item.txHash}
+          value={formatWei(item.amountWei)}
+        />
+      ),
+    ),
   ];
 
   const certificateRecords = [
@@ -496,6 +579,20 @@ export function OperationsTables() {
           title={t("operations.greenCertificateBatches")}
         >
           {certificateRecords}
+        </RecordPanel>
+        <RecordPanel
+          emptyLabel={t("operations.waitingForFundraising")}
+          eyebrow={t("operations.fundraising")}
+          title={t("operations.fundraisingActivity")}
+        >
+          {fundraisingRecords}
+        </RecordPanel>
+        <RecordPanel
+          emptyLabel={t("operations.waitingForDividends")}
+          eyebrow={t("operations.fundraising")}
+          title={t("operations.dividendActivity")}
+        >
+          {dividendRecords}
         </RecordPanel>
         <AccountSummaryPanel items={accounts.data?.items ?? []} />
       </div>

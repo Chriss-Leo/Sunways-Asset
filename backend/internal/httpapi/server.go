@@ -73,6 +73,10 @@ func (s *Server) Router() *gin.Engine {
 	router.GET("/certificates/issuances", s.listCertificateIssuances)
 	router.GET("/certificates/retirements", s.listCertificateRetirements)
 	router.GET("/accounts/summaries", s.listAccountSummaries)
+	router.GET("/fundraising/deposits", s.listFundraisingDeposits)
+	router.GET("/fundraising/withdrawals", s.listFundraisingWithdrawals)
+	router.GET("/fundraising/dividend-distributions", s.listFundraisingDividendDistributions)
+	router.GET("/fundraising/dividend-claims", s.listFundraisingDividendClaims)
 	router.GET("/indexer/status", s.indexerStatus)
 	router.GET("/dashboard/summary", s.dashboardSummary)
 	router.GET("/platform/organizations", s.listOrganizations)
@@ -93,6 +97,9 @@ func (s *Server) Router() *gin.Engine {
 	router.GET("/platform/assets/:id/issuance-check", s.checkAssetIssuanceReady)
 	router.POST("/platform/assets/:id/issue", s.issueAssetDraft)
 	router.GET("/files/:name", s.serveLocalFile)
+	router.POST("/admin/fundraising/deposit", s.adminFundraisingDeposit)
+	router.POST("/admin/fundraising/withdraw", s.adminFundraisingWithdraw)
+	router.POST("/admin/fundraising/distribute-dividends", s.adminDistributeDividends)
 	router.POST("/admin/revenue-deposits", s.adminDepositRevenue)
 	router.POST("/admin/carbon-credits", s.adminMintCarbon)
 	router.POST("/admin/carbon-credits/burn", s.adminBurnCarbon)
@@ -1019,6 +1026,53 @@ func (s *Server) writeTx(c *gin.Context, hash interface{ Hex() string }, err err
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"txHash": hash.Hex()})
+}
+
+func (s *Server) listFundraisingDeposits(c *gin.Context) {
+	items, err := s.store.ListFundraisingDeposits(limitFromQuery(c, 100))
+	writeList(c, items, err, "failed to list fundraising deposits")
+}
+
+func (s *Server) listFundraisingWithdrawals(c *gin.Context) {
+	items, err := s.store.ListFundraisingWithdrawals(limitFromQuery(c, 100))
+	writeList(c, items, err, "failed to list fundraising withdrawals")
+}
+
+func (s *Server) listFundraisingDividendDistributions(c *gin.Context) {
+	items, err := s.store.ListFundraisingDividendDistributions(limitFromQuery(c, 100))
+	writeList(c, items, err, "failed to list fundraising dividend distributions")
+}
+
+func (s *Server) listFundraisingDividendClaims(c *gin.Context) {
+	items, err := s.store.ListFundraisingDividendClaims(limitFromQuery(c, 100))
+	writeList(c, items, err, "failed to list fundraising dividend claims")
+}
+
+func (s *Server) adminFundraisingDeposit(c *gin.Context) {
+	var req admin.FundraisingDepositRequest
+	if !s.bindAdmin(c, &req) {
+		return
+	}
+	hash, err := s.admin.FundraisingDeposit(c.Request.Context(), req)
+	s.writeTx(c, hash, err)
+}
+
+func (s *Server) adminFundraisingWithdraw(c *gin.Context) {
+	var req admin.FundraisingWithdrawRequest
+	if !s.bindAdmin(c, &req) {
+		return
+	}
+	hash, err := s.admin.FundraisingWithdraw(c.Request.Context(), req)
+	s.writeTx(c, hash, err)
+}
+
+func (s *Server) adminDistributeDividends(c *gin.Context) {
+	var req admin.DistributeDividendsRequest
+	if !s.bindAdmin(c, &req) {
+		return
+	}
+	hash, err := s.admin.DistributeDividends(c.Request.Context(), req)
+	s.writeTx(c, hash, err)
 }
 
 func (s *Server) sessionFromRequest(c *gin.Context) (auth.Session, bool) {

@@ -226,6 +226,51 @@ type GreenCertificateRetirement struct {
 	CreatedAt     time.Time `json:"createdAt"`
 }
 
+type FundraisingDeposit struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	ChainID     int64     `gorm:"index" json:"chainId"`
+	Account     string    `gorm:"size:42;index" json:"account"`
+	AmountWei   string    `gorm:"size:80" json:"amountWei"`
+	TxHash      string    `gorm:"size:66;uniqueIndex:idx_fundraising_deposit_log" json:"txHash"`
+	LogIndex    uint      `gorm:"uniqueIndex:idx_fundraising_deposit_log" json:"logIndex"`
+	BlockNumber uint64    `gorm:"index" json:"blockNumber"`
+	CreatedAt   time.Time `json:"createdAt"`
+}
+
+type FundraisingWithdrawal struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	ChainID     int64     `gorm:"index" json:"chainId"`
+	Account     string    `gorm:"size:42;index" json:"account"`
+	AmountWei   string    `gorm:"size:80" json:"amountWei"`
+	TxHash      string    `gorm:"size:66;uniqueIndex:idx_fundraising_withdrawal_log" json:"txHash"`
+	LogIndex    uint      `gorm:"uniqueIndex:idx_fundraising_withdrawal_log" json:"logIndex"`
+	BlockNumber uint64    `gorm:"index" json:"blockNumber"`
+	CreatedAt   time.Time `json:"createdAt"`
+}
+
+type FundraisingDividendDistribution struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	ChainID     int64     `gorm:"index" json:"chainId"`
+	Distributor string    `gorm:"size:42;index" json:"distributor"`
+	AmountWei   string    `gorm:"size:80" json:"amountWei"`
+	HolderCount uint64    `json:"holderCount"`
+	TxHash      string    `gorm:"size:66;uniqueIndex:idx_fundraising_dividend_log" json:"txHash"`
+	LogIndex    uint      `gorm:"uniqueIndex:idx_fundraising_dividend_log" json:"logIndex"`
+	BlockNumber uint64    `gorm:"index" json:"blockNumber"`
+	CreatedAt   time.Time `json:"createdAt"`
+}
+
+type FundraisingDividendClaim struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	ChainID     int64     `gorm:"index" json:"chainId"`
+	Account     string    `gorm:"size:42;index" json:"account"`
+	AmountWei   string    `gorm:"size:80" json:"amountWei"`
+	TxHash      string    `gorm:"size:66;uniqueIndex:idx_fundraising_claim_log" json:"txHash"`
+	LogIndex    uint      `gorm:"uniqueIndex:idx_fundraising_claim_log" json:"logIndex"`
+	BlockNumber uint64    `gorm:"index" json:"blockNumber"`
+	CreatedAt   time.Time `json:"createdAt"`
+}
+
 type UserAssetSummary struct {
 	ID                    uint      `gorm:"primaryKey" json:"id"`
 	ChainID               int64     `gorm:"uniqueIndex:idx_user_asset_chain_account" json:"chainId"`

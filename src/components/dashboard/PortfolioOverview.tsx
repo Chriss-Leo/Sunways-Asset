@@ -208,9 +208,11 @@ export function PortfolioOverview() {
       },
       {
         onSuccess: async (txHash) => {
-          await waitForTransactionReceipt(wagmiConfig, { hash: txHash });
-          myFundClaimableQ.refetch();
-          myFundBalanceQ.refetch();
+          const receipt = await waitForTransactionReceipt(wagmiConfig, { hash: txHash });
+          if (receipt.status === "success") {
+            myFundClaimableQ.refetch();
+            myFundBalanceQ.refetch();
+          }
         },
       },
     );

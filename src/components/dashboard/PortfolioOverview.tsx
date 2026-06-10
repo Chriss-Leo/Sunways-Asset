@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { formatEther } from "viem";
 import { useQuery } from "@tanstack/react-query";
-import { useAccount, useChainId, useReadContract, useReadContracts } from "wagmi";
+import { useAccount, useChainId, useReadContract, useReadContracts, useWriteContract } from "wagmi";
+import { waitForTransactionReceipt } from "@wagmi/core";
+import { wagmiConfig } from "@/config/wagmi";
 import { requiredChain } from "@/config/chains";
 import { useT } from "@/i18n";
 import {
@@ -186,6 +188,34 @@ export function PortfolioOverview() {
   // ── Resolve values ──
   const isPersonal = scope === "personal" && !!account;
 
+  // ── Claim dividends ──
+  const { writeContract: claimDividends, isPending: claimingDividends } =
+    useWriteContract();
+  const claimableWei =
+    isPersonal &&
+    typeof myFundClaimableQ.data === "bigint" &&
+    myFundClaimableQ.data > BigInt(0)
+      ? myFundClaimableQ.data
+      : null;
+
+  const handleClaimDividends = async () => {
+    if (!claimableWei) return;
+    claimDividends(
+      {
+        address: fundAddr,
+        abi: fundraisingPoolAbi,
+        functionName: "claimDividends",
+      },
+      {
+        onSuccess: async (txHash) => {
+          await waitForTransactionReceipt(wagmiConfig, { hash: txHash });
+          myFundClaimableQ.refetch();
+          myFundBalanceQ.refetch();
+        },
+      },
+    );
+  };
+
   const stationsValue: string = backendOk
     ? summaryQuery.data!.stations.toLocaleString()
     : isPersonal
@@ -350,6 +380,28 @@ export function PortfolioOverview() {
           </article>
         ))}
       </div>
+
+      {/* ── Claim dividends ── */}
+      {claimableWei && (
+        <div className="rounded-lg border border-sky-200 bg-sky-50 p-5 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-sky-700">
+              {t("portfolio.fundraisingDividends")}
+            </p>
+            <p className="mt-1 text-xl font-semibold text-sky-800">
+              {formatWeiBigint(claimableWei) ?? "0 ETH"}
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={claimingDividends}
+            onClick={handleClaimDividends}
+            className="rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-50 transition-colors"
+          >
+            {claimingDividends ? t("portfolio.claiming") : t("portfolio.claim")}
+          </button>
+        </div>
+      )}
 
       {/* ── Contract table ── */}
       <section className="rounded-lg border border-zinc-200 bg-white shadow-sm">

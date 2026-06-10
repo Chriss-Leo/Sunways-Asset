@@ -71,6 +71,8 @@ const en = {
     onChain: "On-chain",
     myAssets: "My Assets",
     allAssets: "All Assets",
+    claim: "Claim",
+    claiming: "Claiming...",
   },
 
   station: {
@@ -210,6 +212,7 @@ const en = {
     burnCarbonCreditsDetail:
       "Burn carbon credits from the admin wallet. Triggers a Transfer to zero address event.",
     burn: "Burn",
+    withdraw: "Withdraw",
     updateStationChainStatus: "Update Station Chain Status",
     updateStationChainStatusDetail:
       "Update the on-chain lifecycle status of a station (Pending=0, Active=1, Suspended=2, Retired=3).",

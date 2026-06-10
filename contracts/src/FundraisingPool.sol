@@ -86,21 +86,21 @@ contract FundraisingPool is ERC20, AccessControl, ReentrancyGuard {
     /// you can compare gas costs against an accumulator-based approach later.
     function distributeDividends() external payable onlyRole(DIVIDEND_MANAGER_ROLE) {
         if (msg.value == 0) revert InvalidAmount();
-        uint256 supply = totalSupply();
+        uint256 supply = totalSupply(); // 资金池
         if (supply == 0) revert InvalidAmount();
 
-        uint256 remaining = msg.value;
+        uint256 remaining = msg.value; // 分红金额
         uint256 count = _holders.length;
 
         for (uint256 i = 0; i < count; i++) {
             address holder = _holders[i];
-            uint256 balance = balanceOf(holder);
+            uint256 balance = balanceOf(holder);  // 每个人的持有金额
             if (balance == 0) continue;
 
-            uint256 share = (msg.value * balance) / supply;
+            uint256 share = (msg.value * balance) / supply;  // 按照持有金额比计算分红
             if (share == 0) continue;
 
-            claimableDividends[holder] += share;
+            claimableDividends[holder] += share;  // 个人分红池
             remaining -= share;
         }
 

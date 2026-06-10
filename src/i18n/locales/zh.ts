@@ -71,6 +71,8 @@ const zh = {
     onChain: "链上",
     myAssets: "我的资产",
     allAssets: "全部资产",
+    claim: "领取",
+    claiming: "领取中...",
   },
 
   station: {
@@ -210,6 +212,7 @@ const zh = {
     burnCarbonCreditsDetail:
       "从管理员钱包销毁碳信用，触发 Transfer 到零地址事件。",
     burn: "销毁",
+    withdraw: "取回",
     updateStationChainStatus: "更新电站链上状态",
     updateStationChainStatusDetail:
       "更新电站的链上生命周期状态（Pending=0, Active=1, Suspended=2, Retired=3）。",

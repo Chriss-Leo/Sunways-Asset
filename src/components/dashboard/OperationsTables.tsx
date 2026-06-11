@@ -485,7 +485,7 @@ export function OperationsTables() {
       (item: FundraisingDividendDistribution) => (
         <RecordItem
           key={`fund-div-${item.txHash}-${item.blockNumber}`}
-          meta={`${t("operations.holders")}: ${item.totalSupply}`}
+          meta={`${t("operations.totalSupplyAtDistribution")}: ${formatWei(item.totalSupply)}`}
           title={t("operations.dividendsDistributed")}
           txHash={item.txHash}
           value={formatWei(item.amountWei)}

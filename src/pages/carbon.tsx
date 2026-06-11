@@ -114,7 +114,7 @@ export default function CarbonPage() {
   return (
     <>
       <Head>
-        <title>{t("nav.carbon")} — Sunways Asset</title>
+        <title>{`${t("nav.carbon")} — Sunways Asset`}</title>
       </Head>
 
       <div className="grid gap-6 xl:grid-cols-2">

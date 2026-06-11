@@ -104,7 +104,7 @@ export default function RevenuePage() {
   return (
     <>
       <Head>
-        <title>{t("nav.revenue")} — Sunways Asset</title>
+        <title>{`${t("nav.revenue")} — Sunways Asset`}</title>
       </Head>
 
       <div className="grid gap-6 xl:grid-cols-2">

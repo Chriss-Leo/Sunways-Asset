@@ -45,7 +45,7 @@ export default function DashboardPage() {
   return (
     <>
       <Head>
-        <title>{t("nav.dashboard")} — Sunways Asset</title>
+        <title>{`${t("nav.dashboard")} — Sunways Asset`}</title>
       </Head>
 
       <PortfolioOverview />

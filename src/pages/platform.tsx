@@ -8,7 +8,7 @@ export default function PlatformPage() {
   return (
     <>
       <Head>
-        <title>{t("nav.platform")} — Sunways Asset</title>
+        <title>{`${t("nav.platform")} — Sunways Asset`}</title>
       </Head>
       <PlatformWorkspace />
     </>

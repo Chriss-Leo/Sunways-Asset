@@ -130,7 +130,7 @@ export default function AssetsPage() {
   return (
     <>
       <Head>
-        <title>{t("nav.assets")} — Sunways Asset</title>
+        <title>{`${t("nav.assets")} — Sunways Asset`}</title>
       </Head>
 
       <div className="space-y-5">

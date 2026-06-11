@@ -8,7 +8,7 @@ export default function AdminPage() {
   return (
     <>
       <Head>
-        <title>{t("nav.admin")} — Sunways Asset</title>
+        <title>{`${t("nav.admin")} — Sunways Asset`}</title>
       </Head>
       <AdminConsole />
     </>

@@ -8,7 +8,7 @@ export default function FilesPage() {
   return (
     <>
       <Head>
-        <title>{t("nav.files")} — Sunways Asset</title>
+        <title>{`${t("nav.files")} — Sunways Asset`}</title>
       </Head>
       <FileCenter />
     </>

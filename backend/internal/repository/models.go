@@ -253,7 +253,7 @@ type FundraisingDividendDistribution struct {
 	ChainID     int64     `gorm:"index" json:"chainId"`
 	Distributor string    `gorm:"size:42;index" json:"distributor"`
 	AmountWei   string    `gorm:"size:80" json:"amountWei"`
-	HolderCount uint64    `json:"holderCount"`
+	TotalSupply string    `json:"totalSupply"`
 	TxHash      string    `gorm:"size:66;uniqueIndex:idx_fundraising_dividend_log" json:"txHash"`
 	LogIndex    uint      `gorm:"uniqueIndex:idx_fundraising_dividend_log" json:"logIndex"`
 	BlockNumber uint64    `gorm:"index" json:"blockNumber"`

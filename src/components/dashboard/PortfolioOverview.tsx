@@ -166,7 +166,7 @@ export function PortfolioOverview() {
   const myFundClaimableQ = useReadContract({
     address: fundAddr,
     abi: fundraisingPoolAbi,
-    functionName: "claimableDividends",
+    functionName: "withdrawableDividendOf",
     args: account ? [account] : undefined,
     query: { ...query, enabled: query.enabled && scope === "personal" && !!account },
   });
@@ -204,7 +204,7 @@ export function PortfolioOverview() {
       {
         address: fundAddr,
         abi: fundraisingPoolAbi,
-        functionName: "claimDividends",
+        functionName: "claimDividend",
       },
       {
         onSuccess: async (txHash) => {

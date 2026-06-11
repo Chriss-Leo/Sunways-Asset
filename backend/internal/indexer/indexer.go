@@ -478,8 +478,8 @@ func (i *Indexer) handleDividendsDistributed(contractABI gethabi.ABI, log types.
 	distribution := repository.FundraisingDividendDistribution{
 		ChainID:     i.chain.ChainID,
 		Distributor: topicAddress(log.Topics[1]).Hex(),
-		AmountWei:   values["totalAmount"].(*big.Int).String(),
-		HolderCount: values["holderCount"].(*big.Int).Uint64(),
+		AmountWei:   values["amount"].(*big.Int).String(),
+		TotalSupply: values["totalSupply"].(*big.Int).String(),
 		TxHash:      log.TxHash.Hex(),
 		LogIndex:    uint(log.Index),
 		BlockNumber: log.BlockNumber,

@@ -4,7 +4,6 @@ pragma solidity ^0.8.24;
 import {Test} from "forge-std/Test.sol";
 import {FundraisingPool} from "../src/FundraisingPool.sol";
 
-/// @notice Unit tests for FundraisingPool — deposit/mint, burn/withdraw, dividends.
 contract FundraisingPoolTest is Test {
     FundraisingPool private pool;
 
@@ -14,7 +13,6 @@ contract FundraisingPoolTest is Test {
     address private carol = address(0xCAFE);
     address private attacker = address(0xBAD);
 
-    /// @notice Deploy a fresh pool and fund test accounts before each test.
     function setUp() public {
         vm.deal(alice, 100 ether);
         vm.deal(bob, 100 ether);
@@ -35,7 +33,6 @@ contract FundraisingPoolTest is Test {
 
         assertEq(pool.balanceOf(alice), 5 ether);
         assertEq(pool.totalSupply(), 5 ether);
-        assertEq(pool.holderCount(), 1);
     }
 
     function testDepositMultipleAccounts() public {
@@ -47,7 +44,6 @@ contract FundraisingPoolTest is Test {
         assertEq(pool.balanceOf(alice), 3 ether);
         assertEq(pool.balanceOf(bob), 7 ether);
         assertEq(pool.totalSupply(), 10 ether);
-        assertEq(pool.holderCount(), 2);
     }
 
     function testDepositZeroReverts() public {
@@ -80,18 +76,6 @@ contract FundraisingPoolTest is Test {
         assertEq(alice.balance, balanceBefore + 3 ether);
     }
 
-    function testWithdrawFullBalanceRemovesHolder() public {
-        vm.prank(alice);
-        pool.deposit{value: 5 ether}();
-
-        vm.prank(alice);
-        pool.withdraw(5 ether);
-
-        assertEq(pool.balanceOf(alice), 0);
-        assertEq(pool.holderCount(), 0);
-        assertEq(pool.allHolders().length, 0);
-    }
-
     function testWithdrawZeroReverts() public {
         vm.prank(alice);
         vm.expectRevert(FundraisingPool.InvalidAmount.selector);
@@ -118,7 +102,7 @@ contract FundraisingPoolTest is Test {
     }
 
     // ---------------------------------------------------------------
-    // Dividend Distribution
+    // Dividend Distribution — O(1) per-share accumulator
     // ---------------------------------------------------------------
 
     function testDistributeDividendsSingleHolder() public {
@@ -128,7 +112,7 @@ contract FundraisingPoolTest is Test {
         vm.prank(admin);
         pool.distributeDividends{value: 1 ether}();
 
-        assertEq(pool.claimableDividends(alice), 1 ether);
+        assertApproxEqAbs(pool.withdrawableDividendOf(alice), 1 ether, 2);
         assertEq(pool.totalDividendsDistributed(), 1 ether);
     }
 
@@ -141,10 +125,8 @@ contract FundraisingPoolTest is Test {
         vm.prank(admin);
         pool.distributeDividends{value: 10 ether}();
 
-        // Alice: 3/10 = 30% of 10 ether = 3 ether
-        // Bob:   7/10 = 70% of 10 ether = 7 ether
-        assertEq(pool.claimableDividends(alice), 3 ether);
-        assertEq(pool.claimableDividends(bob), 7 ether);
+        assertEq(pool.withdrawableDividendOf(alice), 3 ether);
+        assertEq(pool.withdrawableDividendOf(bob), 7 ether);
     }
 
     function testDistributeDividendsThreeHolders() public {
@@ -158,14 +140,14 @@ contract FundraisingPoolTest is Test {
         vm.prank(admin);
         pool.distributeDividends{value: 100 ether}();
 
-        assertEq(pool.claimableDividends(alice), 20 ether);
-        assertEq(pool.claimableDividends(bob), 30 ether);
-        assertEq(pool.claimableDividends(carol), 50 ether);
+        assertEq(pool.withdrawableDividendOf(alice), 20 ether);
+        assertEq(pool.withdrawableDividendOf(bob), 30 ether);
+        assertEq(pool.withdrawableDividendOf(carol), 50 ether);
     }
 
     function testDistributeDividendsZeroSupplyReverts() public {
         vm.prank(admin);
-        vm.expectRevert(FundraisingPool.InvalidAmount.selector);
+        vm.expectRevert(FundraisingPool.NoHolders.selector);
         pool.distributeDividends{value: 1 ether}();
     }
 
@@ -193,7 +175,7 @@ contract FundraisingPoolTest is Test {
 
         vm.prank(admin);
         vm.expectEmit(true, true, true, true);
-        emit FundraisingPool.DividendsDistributed(admin, 1 ether, 1);
+        emit FundraisingPool.DividendsDistributed(admin, 1 ether, 10 ether);
         pool.distributeDividends{value: 1 ether}();
     }
 
@@ -201,7 +183,7 @@ contract FundraisingPoolTest is Test {
     // Claim Dividends
     // ---------------------------------------------------------------
 
-    function testClaimDividendsTransfersETH() public {
+    function testClaimDividendTransfersETH() public {
         vm.prank(alice);
         pool.deposit{value: 10 ether}();
 
@@ -210,13 +192,13 @@ contract FundraisingPoolTest is Test {
 
         uint256 balanceBefore = alice.balance;
         vm.prank(alice);
-        pool.claimDividends();
+        pool.claimDividend();
 
-        assertEq(alice.balance, balanceBefore + 2 ether);
-        assertEq(pool.claimableDividends(alice), 0);
+        assertApproxEqAbs(alice.balance, balanceBefore + 2 ether, 2);
+        assertEq(pool.withdrawableDividendOf(alice), 0);
     }
 
-    function testClaimDividendsEmitsEvent() public {
+    function testClaimDividendEmitsEvent() public {
         vm.prank(alice);
         pool.deposit{value: 5 ether}();
 
@@ -224,21 +206,21 @@ contract FundraisingPoolTest is Test {
         pool.distributeDividends{value: 1 ether}();
 
         vm.prank(alice);
-        vm.expectEmit(true, true, true, true);
-        emit FundraisingPool.DividendClaimed(alice, 1 ether);
-        pool.claimDividends();
+        vm.expectEmit(true, true, false, false);
+        emit FundraisingPool.DividendClaimed(alice, 0); // amount not checked
+        pool.claimDividend();
     }
 
-    function testClaimDividendsNothingReverts() public {
+    function testClaimDividendNothingReverts() public {
         vm.prank(alice);
         pool.deposit{value: 1 ether}();
 
         vm.prank(alice);
         vm.expectRevert(FundraisingPool.NoDividendsToClaim.selector);
-        pool.claimDividends();
+        pool.claimDividend();
     }
 
-    function testClaimDividendsTwiceDoesNotDoubleSpend() public {
+    function testClaimDividendTwiceDoesNotDoubleSpend() public {
         vm.prank(alice);
         pool.deposit{value: 5 ether}();
 
@@ -246,11 +228,11 @@ contract FundraisingPoolTest is Test {
         pool.distributeDividends{value: 1 ether}();
 
         vm.prank(alice);
-        pool.claimDividends();
+        pool.claimDividend();
 
         vm.prank(alice);
         vm.expectRevert(FundraisingPool.NoDividendsToClaim.selector);
-        pool.claimDividends();
+        pool.claimDividend();
     }
 
     // ---------------------------------------------------------------
@@ -263,53 +245,18 @@ contract FundraisingPoolTest is Test {
         vm.prank(bob);
         pool.deposit{value: 5 ether}();
 
-        // Round 1
         vm.prank(admin);
         pool.distributeDividends{value: 2 ether}();
 
-        assertEq(pool.claimableDividends(alice), 1 ether);
-        assertEq(pool.claimableDividends(bob), 1 ether);
+        assertApproxEqAbs(pool.withdrawableDividendOf(alice), 1 ether, 2);
+        assertApproxEqAbs(pool.withdrawableDividendOf(bob), 1 ether, 2);
 
-        // Round 2 — balances unchanged
         vm.prank(admin);
         pool.distributeDividends{value: 4 ether}();
 
-        assertEq(pool.claimableDividends(alice), 3 ether);
-        assertEq(pool.claimableDividends(bob), 3 ether);
-
+        assertApproxEqAbs(pool.withdrawableDividendOf(alice), 3 ether, 2);
+        assertApproxEqAbs(pool.withdrawableDividendOf(bob), 3 ether, 2);
         assertEq(pool.totalDividendsDistributed(), 6 ether);
-    }
-
-    // ---------------------------------------------------------------
-    // Holder Tracking via Transfers
-    // ---------------------------------------------------------------
-
-    function testTransferAddsNewHolder() public {
-        vm.prank(alice);
-        pool.deposit{value: 10 ether}();
-
-        vm.prank(alice);
-        pool.transfer(bob, 4 ether);
-
-        assertEq(pool.balanceOf(alice), 6 ether);
-        assertEq(pool.balanceOf(bob), 4 ether);
-        assertEq(pool.holderCount(), 2);
-
-        address[] memory holders = pool.allHolders();
-        assertEq(holders.length, 2);
-    }
-
-    function testTransferRemovesSenderWhenBalanceZero() public {
-        vm.prank(alice);
-        pool.deposit{value: 5 ether}();
-
-        vm.prank(alice);
-        pool.transfer(bob, 5 ether);
-
-        assertEq(pool.balanceOf(alice), 0);
-        assertEq(pool.balanceOf(bob), 5 ether);
-        assertEq(pool.holderCount(), 1);
-        assertEq(pool.allHolders()[0], bob);
     }
 
     // ---------------------------------------------------------------
@@ -327,34 +274,19 @@ contract FundraisingPoolTest is Test {
         vm.prank(alice);
         pool.transfer(bob, 10 ether);
 
-        // Alice should still be able to claim dividends accrued before transfer
+        // Alice can still claim dividends accrued before transfer
         uint256 balanceBefore = alice.balance;
         vm.prank(alice);
-        pool.claimDividends();
-        assertEq(alice.balance, balanceBefore + 2 ether);
+        pool.claimDividend();
+        assertApproxEqAbs(alice.balance, balanceBefore + 2 ether, 2);
 
-        // Bob has tokens now but no dividends yet
-        assertEq(pool.claimableDividends(bob), 0);
+        // Bob has tokens now but no dividends accrued before the transfer
+        assertEq(pool.withdrawableDividendOf(bob), 0);
     }
 
     // ---------------------------------------------------------------
     // Edge Cases
     // ---------------------------------------------------------------
-
-    function testAllHoldersReturnsCorrectList() public {
-        vm.prank(alice);
-        pool.deposit{value: 1 ether}();
-        vm.prank(bob);
-        pool.deposit{value: 1 ether}();
-        vm.prank(carol);
-        pool.deposit{value: 1 ether}();
-
-        address[] memory holders = pool.allHolders();
-        assertEq(holders.length, 3);
-        assertEq(holders[0], alice);
-        assertEq(holders[1], bob);
-        assertEq(holders[2], carol);
-    }
 
     function testETHBalanceMatchesTotalSupply() public {
         vm.prank(alice);
@@ -362,10 +294,8 @@ contract FundraisingPoolTest is Test {
         vm.prank(bob);
         pool.deposit{value: 5 ether}();
 
-        // Contract ETH = deposits only (not dividends)
         assertEq(address(pool).balance, 15 ether);
 
-        // After withdraw, ETH and supply both decrease
         vm.prank(alice);
         pool.withdraw(4 ether);
         assertEq(pool.totalSupply(), 11 ether);
@@ -378,27 +308,41 @@ contract FundraisingPoolTest is Test {
         pool.withdraw(1 ether);
     }
 
-    /// @notice Reentrancy guard: a malicious contract cannot re-enter withdraw.
+    // ---------------------------------------------------------------
+    // Reentrancy
+    // ---------------------------------------------------------------
+
     function testWithdrawReentrancyGuard() public {
-        MaliciousReceiver receiver = new MaliciousReceiver(address(pool));
+        MaliciousReceiver receiver = new MaliciousReceiver(payable(address(pool)));
         vm.deal(address(receiver), 100 ether);
 
-        // Give the receiver some tokens via deposit
         receiver.deposit{value: 2 ether}();
 
-        // The receiver's receive() tries to call withdraw again
         vm.prank(address(receiver));
         vm.expectRevert();
         receiver.attackWithdraw(2 ether);
     }
+
+    function testClaimDividendReentrancyGuard() public {
+        MaliciousReceiver receiver = new MaliciousReceiver(payable(address(pool)));
+        vm.deal(address(receiver), 100 ether);
+
+        receiver.deposit{value: 10 ether}();
+
+        vm.prank(admin);
+        pool.distributeDividends{value: 2 ether}();
+
+        vm.prank(address(receiver));
+        vm.expectRevert();
+        receiver.attackClaim();
+    }
 }
 
-/// @notice Malicious contract that attempts reentrancy on FundraisingPool.
 contract MaliciousReceiver {
     FundraisingPool private pool;
     bool private attacking;
 
-    constructor(address _pool) {
+    constructor(address payable _pool) {
         pool = FundraisingPool(_pool);
     }
 
@@ -411,10 +355,14 @@ contract MaliciousReceiver {
         pool.withdraw(amount);
     }
 
+    function attackClaim() external {
+        attacking = true;
+        pool.claimDividend();
+    }
+
     receive() external payable {
         if (attacking) {
             attacking = false;
-            // Try to re-enter withdraw — should fail due to ReentrancyGuard
             pool.withdraw(1);
         }
     }

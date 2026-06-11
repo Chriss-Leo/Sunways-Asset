@@ -125,7 +125,7 @@ export type FundraisingWithdrawal = {
 export type FundraisingDividendDistribution = {
   distributor: string;
   amountWei: string;
-  holderCount: number;
+  totalSupply: string;
   txHash: string;
   blockNumber: number;
   createdAt: string;
